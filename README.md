@@ -1,6 +1,7 @@
 # Pincheck KAIST
 
 Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/pintos-kaist) projects
+... with several features.
 
 ## README
 
