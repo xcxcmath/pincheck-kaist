@@ -25,7 +25,7 @@ pintos-kaist/src/threads$ pincheck
 # Run tests of userprog project (can be executed in other directories)
 $ pincheck -p userprog
 
-# Run tests with 3 concurrent test pool
+# Run tests with 3 parallel test pool
 pintos-kaist/src/threads$ pincheck -j 3
 
 # Run "alarm-single" test only
