@@ -27,6 +27,7 @@ pintos-kaist/src/threads$ pincheck
 $ pincheck -p userprog
 
 # Run tests with 3 parallel test pool
+# The default value is the number of hardware cores(threads)
 pintos-kaist/src/threads$ pincheck -j 3
 
 # Run "alarm-single" test only
@@ -35,8 +36,14 @@ pintos-kaist/src/threads$ pincheck -- alarm-single
 # Run tests whose names have "alarm-" or "priority-" prefix
 pintos-kaist/src/threads$ pincheck -- alarm-* -- priority-*
 
+# Run tests except the tests with "mlfqs" prefix
+pintos-kaist/src/threads$ pincheck --exclude mlfqs*
+
 # Run tests which belong to "...../mlfqs" test subdirectory
 pintos-kaist/src/threads$ pincheck --subdir */mlfqs
+
+# Run tests which don't belong to "...../mlfqs" test subdirectory
+pintos-kaist/src/threads$ pincheck --subdir-exclude */mlfqs
 
 # Run tests after cleaning build directory
 pintos-kaist/src/vm$ pincheck --clear-build
@@ -48,6 +55,25 @@ $ pincheck --verbose
 $ pincheck --version
 $ pincheck --help
 ```
+
+## Benchmark with all passing `threads` implementation
+
+On KCloud VM (2 cores, 4GB RAM, 100GB Storage, Ubuntu 18.04)
+
+- `make check` : 842 seconds
+- `make check -j 2` : 423 seconds
+- `pincheck (-j 2)` : 426 seconds
+- 1 MLFQS test failed for both `make` and `pincheck` with `-j 3` or more.
+
+On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
+
+- `make check` : 901 seconds
+- `make check -j 4` : 227 seconds
+- `pincheck (-j 4)` : 227 seconds
+- `make -j 5` : 197 seconds
+- `pincheck -j 5` : 197 seconds
+
+Note that the longest test to finish (`mlfqs-recent-1`) takes about 190 seconds.
 
 ## Prerequisitss
 
