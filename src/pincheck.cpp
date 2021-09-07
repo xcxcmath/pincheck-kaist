@@ -214,6 +214,7 @@ int main(int argc, char *argv[]) {
         std::cout << std::endl;
       }
     }
+    std::cout << std::endl;
   }
 
   std::cout << "pincheck exiting with code " << return_value << std::endl;
