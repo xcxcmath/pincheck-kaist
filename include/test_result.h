@@ -18,7 +18,7 @@ class TestResult {
 
     TestResult();
     TestResult(const TestRunner&);
-    void print_row() const;
+    void print_row(bool detail) const;
 };
 
 

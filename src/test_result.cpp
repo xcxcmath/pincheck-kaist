@@ -16,7 +16,7 @@ TestResult::TestResult(const TestRunner& tr)
   full_name = tr.full_name;
 }
 
-void TestResult::print_row() const {
+void TestResult::print_row(bool detail) const {
   std::cout << termcolor::reset << termcolor::bold;
   if(passed) std::cout << termcolor::green << "pass  ";
   else if(except_dump || exit_code) std::cout << termcolor::bright_red << "ERROR ";
@@ -27,7 +27,7 @@ void TestResult::print_row() const {
   std::cout << " by "
     << (std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time)).count()
     << " sec" << termcolor::reset;
-  if(!passed) {
+  if(!passed && detail) {
     std::cout << "\ncode : " << exit_code;
     std::cout << "\ndump : " << dump;
     if(except_dump)

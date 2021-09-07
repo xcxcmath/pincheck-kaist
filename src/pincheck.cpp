@@ -131,6 +131,12 @@ int main(int argc, char *argv[]) {
 
     target_tests.emplace_back(std::move(subdir), std::move(name));
   }
+  if (is_verbose) {
+    std::cout << "-- Target tests --" << std::endl;
+    for(const auto& [subdir, name] : target_tests) {
+      std::cout << subdir << " -> " << name << std::endl;
+    }
+  }
 
   const auto pool_size = program.get<unsigned>("-j");
   std::vector<TestResult> results, results_cache;
@@ -160,7 +166,7 @@ int main(int argc, char *argv[]) {
     if(!results_cache.empty()) {
       std::cout << "\033[2K\033[1G";
       for(const auto& r : results_cache) {
-        r.print_row();
+        r.print_row(true);
         std::cout << std::endl;
         results.emplace_back(r);
       }
@@ -199,6 +205,17 @@ int main(int argc, char *argv[]) {
   std::cout << termcolor::reset << std::endl << std::endl;
   
   const int return_value = (passed == target_tests.size() ? 0 : 1);
+
+  if (return_value != 0) {
+    std::cout << "-- Failed tests --" << std::endl;
+    for (const auto& tr : results) {
+      if(!tr.passed) {
+        tr.print_row(is_verbose);
+        std::cout << std::endl;
+      }
+    }
+  }
+
   std::cout << "pincheck exiting with code " << return_value << std::endl;
   return return_value;
 }
