@@ -17,6 +17,13 @@ some test cases might be failed even if it is correct.
 - [ikalnytskyi/termcolor](https://github.com/ikalnytskyi/termcolor)
 - [p-ranav/argparse](https://github.com/p-ranav/argparse)
 
+## Features
+
+- Test using multi-threads
+- More visual cues
+- Test target filtering with wildcards (`*`, `?`)
+- Running test of any project in any path
+
 ## Usage
 
 ```sh

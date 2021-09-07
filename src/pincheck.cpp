@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
   program.add_argument("-p", "--project")
          .help("Pintos project to run test; threads, userprog, vm, or filesys");
   program.add_argument("-j", "--jobs")
-         .help("Maximum number of parallel test execution; "s + std::to_string(HARDWARE_CONCURRENCY) + " by default for this machine")
+         .help("Maximum number of parallel test execution")
          .scan<'i', unsigned>()
          .default_value(HARDWARE_CONCURRENCY);
   program.add_argument("--verbose", "-V")
