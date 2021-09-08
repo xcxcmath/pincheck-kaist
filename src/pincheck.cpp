@@ -50,11 +50,11 @@ int main(int argc, char *argv[]) {
          .help("Test subdir; can be given multiple times")
          .default_value(Vector<String>{"*"})
          .append();
-  program.add_argument("-e", "--exclude")
+  program.add_argument("-e", "--exclude", "--except")
          .help("Test name to be excluded; can be given multiple times")
          .default_value(Vector<String>{})
          .append();
-  program.add_argument("-sde", "--subdir-exclude")
+  program.add_argument("-sde", "--subdir-exclude", "--subdir-except")
          .help("Test subdir to be excluded; can be given multiple times")
          .default_value(Vector<String>{})
          .append();
