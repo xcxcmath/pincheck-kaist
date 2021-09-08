@@ -156,10 +156,15 @@ You may also want to run it shortly. One of the options is copying `pincheck` in
 ```sh
 # Option 1) copying executable to pintos utils directory
 # The pintos utils path must be registered to PATH
+
+# Makefile automatically detects the pintos utils directory:
+$ make install
+# or you can copy manually:
 $ cp build/pincheck /home/<your name>/pintos-kaist/utils
 ```
 
-In this case, if you are using git for your project, you may add `pincheck` to `.gitignore`.
+In this case, if you are using git for your project, you may add `pincheck` to `.gitignore`. If `Cannot find pintos` message appears when running `make install`,
+please check whether you can run command `pintos`.
 
 Another option is editing `PATH` in `.bashrc` adding the build directory.
 
@@ -173,5 +178,5 @@ export PATH="$PATH:(dir of pincheck-kaist)/build"
 
 ```sh
 pincheck-kaist$ git pull
-pincheck-kaist$ make
+pincheck-kaist$ make install
 ```
