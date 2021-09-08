@@ -15,7 +15,7 @@ $(BUILD)/$1.o : $(SRC)/$1.cpp $(INCLUDE)/$1.h $(INCLUDE)/common.h | $(BUILD)
 
 endef
 
-.PHONY: all run clean #install uninstall
+.PHONY: all run clean install #uninstall
 
 all: $(PROG)
 
@@ -30,6 +30,11 @@ run: $(PROG)
 
 clean:
 	rm -rf $(BUILD)
+
+install: $(PROG)
+	PINTOSPATH=$$(dirname `which pintos`);\
+	if [ -d "$$PINTOSPATH" ]; then cp $(PROG) $$PINTOSPATH ;\
+	else echo "Cannot find pintos" ; exit 1; fi
 
 $(PROG): $(PROG).o $(addprefix $(BUILD)/,$(addsuffix .o,$(MODULES)))
 	$(CC) $(CXXFLAGS) -o $@ $^ -lstdc++fs -lpthread
