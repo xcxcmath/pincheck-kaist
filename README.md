@@ -3,6 +3,9 @@
 Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/pintos-kaist) projects
 ... with several features.
 
+![thumb_threads](./images/thumb_threads.gif)
+![thumb_userprog](./images/thumb_userprog.gif)
+
 ## README
 
 - As this utility is still in progress to complete, there would be many errors, bugs, or
