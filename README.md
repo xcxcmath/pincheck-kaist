@@ -85,7 +85,7 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 
 Note that the longest test to finish (`mlfqs-recent-1`) takes about 190 seconds.
 
-## Prerequisitss
+## Prerequisites
 
 ### GCC 8.3.0 or later
 
