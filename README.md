@@ -135,7 +135,7 @@ source /home/<your id>/pintos-kaist/activate
 First, clone this repo somewhere and make build.
 
 ```sh
-$ git https://github.com/xcxcmath/pincheck-kaist
+$ git clone https://github.com/xcxcmath/pincheck-kaist
 # or if you use github cli
 $ gh repo clone xcxcmath/pincheck-kaist
 
