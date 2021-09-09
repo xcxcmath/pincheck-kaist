@@ -56,7 +56,7 @@ pintos-kaist/src/threads$ pincheck --subdir */mlfqs
 pintos-kaist/src/threads$ pincheck --subdir-exclude */mlfqs
 
 # Run tests after cleaning build directory
-pintos-kaist/src/vm$ pincheck --clear-build
+pintos-kaist/src/vm$ pincheck --clean-build
 
 # Run with verbose
 $ pincheck --verbose
