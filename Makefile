@@ -32,7 +32,7 @@ clean:
 	rm -rf $(BUILD)
 
 install: $(PROG)
-	PINTOSPATH=$$(dirname `which pintos`);\
+	@PINTOSPATH=$$(dirname `which pintos`);\
 	if [ -d "$$PINTOSPATH" ]; then cp $(PROG) $$PINTOSPATH ;\
 	else echo "Cannot find pintos" ; exit 1; fi
 
