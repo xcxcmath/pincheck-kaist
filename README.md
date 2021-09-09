@@ -148,7 +148,7 @@ $ make -j 2
 Then you can use `pincheck` executable anyway:
 
 ```sh
-<dir of pintos-kaist>/build/pincheck -p filesys
+<dir of pincheck-kaist>/build/pincheck -p filesys
 ```
 
 You may also want to run it shortly. One of the options is copying `pincheck` into pintos' utils directory.
