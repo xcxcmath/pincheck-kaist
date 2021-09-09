@@ -87,6 +87,8 @@ Note that the longest test to finish (`mlfqs-recent-1`) takes about 190 seconds.
 
 ## Prerequisites
 
+**Please read carefully.**
+
 ### GCC 8.3.0 or later
 
 Any C++ compiler that supports C++17 well with file system library would be enough.
@@ -128,19 +130,22 @@ source /root/pintos-kaist/activate
 source /home/<your id>/pintos-kaist/activate
 ```
 
+Afterwards, you should get output by running `which pintos` on the shell. If nothing printed, please read above carefully.
+
 ### CPU with 2+ cores recommended
 
 ## Installation
+
+**Please read carefully.**
 
 First, clone this repo somewhere and make build.
 
 ```sh
 $ git clone https://github.com/xcxcmath/pincheck-kaist
-# or if you use github cli
-$ gh repo clone xcxcmath/pincheck-kaist
 
 $ cd pincheck-kaist
 $ make
+
 # or if you want to utilize dual(2)-core CPU for compiling,
 $ make -j 2
 ```
