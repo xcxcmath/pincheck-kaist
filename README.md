@@ -66,7 +66,9 @@ $ pincheck --version
 $ pincheck --help
 ```
 
-## Benchmark with all passing `threads` implementation
+## Benchmark with all passing implementation
+
+### `threads`
 
 On KCloud VM (2 cores, 4GB RAM, 100GB Storage, Ubuntu 18.04)
 
@@ -80,10 +82,22 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 - `make check` : 901 seconds
 - `make check -j 4` : 227 seconds
 - `pincheck (-j 4)` : 227 seconds
-- `make -j 5` : 197 seconds
+- `make check -j 5` : 197 seconds
 - `pincheck -j 5` : 197 seconds
 
 Note that the longest test to finish (`mlfqs-recent-1`) takes about 190 seconds.
+
+### `userprog` (without `dup2`)
+
+On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
+
+- `make check` : 181 seconds
+- `make check -j 4` : 69 seconds
+- `pincheck (-j 4)` : 77 seconds
+- `make check -j 5` : 66 seconds
+- `pincheck -j 5` : 72 seconds
+- `make check -j 8` : 65 seconds
+- `pincheck -j 8` : 69 seconds
 
 ## Prerequisites
 
