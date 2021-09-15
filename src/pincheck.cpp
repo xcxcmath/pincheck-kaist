@@ -75,6 +75,14 @@ int main(int argc, char *argv[]) {
          .help("# of repeating the whole checking")
          .scan<'i', unsigned>()
          .default_value(static_cast<unsigned>(1));
+  program.add_argument("--gdb")
+         .help("Run with --gdb option for pintos; used with --just-run")
+         .default_value(false)
+         .implicit_value(true);
+  program.add_argument("--with-timeout")
+         .help("Run with TIMEOUT (-T option) for pintos; used with --just-run")
+         .default_value(false)
+         .implicit_value(true);
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception& e) {
@@ -348,12 +356,50 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
     panic(panic_msg);
   }
 
-  const auto full_run_command = string_trim(*(get_run_cmd_result.second));
+  auto full_run_command = string_trim(*(get_run_cmd_result.second));
   const auto cut_idx = full_run_command.find('<');
   if(cut_idx == String::npos) {
     panic_msg << "The command line to run the case seems to be not valid:\n";
     panic_msg << full_run_command;
     panic(panic_msg);
+  }
+
+  full_run_command = string_trim(full_run_command.substr(0, cut_idx));
+  
+  if(program.get<bool>("--gdb")) {
+    const auto gdb_idx = full_run_command.find(' ');
+    if (gdb_idx == String::npos) {
+      full_run_command += " --gdb";
+    } else {
+      full_run_command = full_run_command.substr(0, gdb_idx) + " --gdb" + full_run_command.substr(gdb_idx);
+    }
+  }
+
+  if(!program.get<bool>("--with-timeout")) {
+    const auto t_opt = "-T"s;
+    const auto t_idx = full_run_command.find(t_opt);
+    if (t_idx != String::npos) {
+      size_t i = t_idx + t_opt.size();
+      for(;i < full_run_command.size(); ++i) {
+        if(!std::isspace(full_run_command[i])) {
+          break;
+        }
+      }
+      if(i != full_run_command.size()) {
+        i = i+1;
+        for(;i < full_run_command.size(); ++i) {
+          if(std::isspace(full_run_command[i])) {
+            break;
+          }
+        }
+
+        if(i == full_run_command.size()) {
+          full_run_command = full_run_command.substr(0, t_idx);
+        } else {
+          full_run_command = full_run_command.substr(0, t_idx) + full_run_command.substr(i);
+        }
+      }
+    }
   }
 
   const auto run_command = string_trim(full_run_command.substr(0, cut_idx))
