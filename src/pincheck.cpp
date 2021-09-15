@@ -71,6 +71,10 @@ int main(int argc, char *argv[]) {
          .append();
   program.add_argument("-jr", "--just-run")
          .help("Run a case getting the output; only one at a time is required");
+  program.add_argument("-r", "--repeat")
+         .help("# of repeating the whole checking")
+         .scan<'i', unsigned>()
+         .default_value(static_cast<unsigned>(1));
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception& e) {
@@ -151,7 +155,6 @@ int main(int argc, char *argv[]) {
       std::cout << subdir << " -> " << name << std::endl;
     }
   }
-  std::cout << std::endl;
 
 
   //--------------------------------------------------------
@@ -190,14 +193,28 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
 
   const auto is_verbose = program.get<bool>("--verbose");
   const auto pool_size = program.get<unsigned>("-j");
+
+  const auto repeats = program.get<unsigned>("--repeat");
+
+  const String omit_msg = " ... ";
+  constexpr auto COL_JITTER = 3;
+
+  unsigned epoch_passed = 0;
+
+  for(unsigned epoch = 1; epoch <= repeats; ++epoch){
   Vector<TestResult> results, results_cache;
   Vector<std::unique_ptr<TestRunner>> pool(pool_size);
+
   size_t next = 0;
+
+  if(repeats > 1) {
+    std::cout << termcolor::bold << "\nEpoch " << epoch << " of " << repeats << termcolor::reset;
+    std::cout << " (so far: " << termcolor::green << epoch_passed << " epochs passed, "
+      << termcolor::red << (epoch - epoch_passed - 1) << " epochs failed" << termcolor::reset << ")" << std::endl;
+  }
   
   // init pool print
   std::cout << std::endl;
-  const String omit_msg = " ... ";
-  constexpr auto COL_JITTER = 3;
   while(results.size() < target_tests.size()) {
     for(size_t i = 0; i < pool_size; ++i) {
       if(pool[i]) {
@@ -253,9 +270,9 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
   std::cout << "\033[2K\033[1G";
   std::cout << "\nFinished total " << termcolor::bold << target_tests.size() << " tests." << termcolor::reset << std::endl;
   
-  const int return_value = (passed == target_tests.size() ? 0 : 1);
+  const bool all_passed = (passed == target_tests.size());
 
-  if (return_value != 0) {
+  if (!all_passed) {
     std::cout << "\n" << termcolor::bright_red << "-- Failed tests --" << termcolor::reset << std::endl;
     for (const auto& tr : results) {
       if(!tr.passed) {
@@ -274,8 +291,31 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
   std::cout << failed;
   std::cout << termcolor::reset << std::endl << std::endl;
 
-  if (return_value == 0) {
+  if (all_passed) {
     std::cout << termcolor::blue << termcolor::bold << "Correct!" << termcolor::reset << std::endl;
+    epoch_passed++;
+  }
+
+  } // for-loop of epoch
+
+  bool all_epoch_passed = epoch_passed == repeats;
+  int return_value = all_epoch_passed ? 0 : 1;
+  if (repeats > 1) {
+    unsigned epoch_failed = repeats - epoch_passed;
+    std::cout << std::endl;
+    std::cout << termcolor::bold << "All " << repeats << " trials done." << std::endl;
+    std::cout << termcolor::reset << termcolor::green << "All passing epochs: ";
+    if(epoch_passed != 0) std::cout << termcolor::bold;
+    std::cout << epoch_passed << std::endl;
+
+    std::cout << termcolor::reset << termcolor::red << "Failed epochs: ";
+    if(epoch_failed != 0) std::cout << termcolor::bold;
+    std::cout << epoch_failed;
+    std::cout << termcolor::reset << std::endl << std::endl;
+
+    if (all_epoch_passed) {
+      std::cout << termcolor::blue << termcolor::bold << "Succeeded for all trials!" << termcolor::reset << std::endl;
+    }
   }
 
   return return_value;
