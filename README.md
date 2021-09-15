@@ -4,7 +4,23 @@ Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/p
 ... with several features.
 
 ![thumb_threads](./images/thumb_threads.gif)
-![thumb_userprog](./images/thumb_userprog.gif)
+
+## Index
+
+- [README](#readme)
+- [Acknowledgement](#acknowledgement)
+- [Features](#features)
+  - [Testing](#testing)
+  - [Running](#running)
+  - [Debugging](#debugging)
+- [Usage](#usage)
+  - [Testing](#for-testing)
+  - [Running](#for-running)
+  - [Debugging](#for-debugging)
+- [Benchmarks](#benchmark-with-all-passing-implementation)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Update](#update)
 
 ## README
 
@@ -22,12 +38,33 @@ some test cases might be failed even if it is correct.
 
 ## Features
 
-- Test using multi-threads
-- More visual cues
+### Testing
+
+![thumb_userprog](./images/thumb_userprog.gif)
+
+- Test using multi-threads, with more visual cues
 - Test target filtering with wildcards (`*`, `?`)
 - Running test of any project in any path
 
+![thumb_repeat](./images/thumb_repeat.gif)
+
+- Repeating the whole checking process multiple times
+
+### Running
+
+![thumb_just_run](./images/thumb_just_run.gif)
+
+- Running one case to see only the output, but with additional `backtrace` detection
+
+### Debugging
+
+![thumb_gdb](./images/thumb_gdb.gif)
+
+- Giving GDB option without needs to search such long command and type it
+
 ## Usage
+
+### For testing
 
 ```sh
 # Run tests of threads project
@@ -58,12 +95,35 @@ pintos-kaist/src/threads$ pincheck --subdir-exclude */mlfqs
 # Run tests after cleaning build directory
 pintos-kaist/src/vm$ pincheck --clean-build
 
+# Repeat the whole tests 5 times
+pintos-kaist/src/filesys$ pincheck --repeat 5
+
 # Run with verbose
 $ pincheck --verbose
 
 # version & help
 $ pincheck --version
 $ pincheck --help
+```
+
+### For running
+
+```sh
+# Just run to see the outputs and possible backtraces
+$ pincheck --just-run alarm-single
+
+# You can pass as the full path, too.
+$ pincheck --just-run tests/userprog/dup2/dup2-complex
+
+# Just run, but with its timeout option
+$ pincheck --just-run multi-oom --with-timeout
+```
+
+### For debugging
+
+```sh
+# Just run, but with gdb option
+$ pincheck --just-run syn-read --gdb
 ```
 
 ## Benchmark with all passing implementation
