@@ -20,9 +20,19 @@ struct winsize get_winsize() {
   return winsize;
 }
 
+enum class PincheckMode {
+  check, run
+};
+
+static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
+static int run_mode_run (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
+
 int main(int argc, char *argv[]) {
   using namespace std::string_literals;
   std::ostringstream panic_msg;
+  auto mode = PincheckMode::check;
+
+  const std::chrono::system_clock::time_point pincheck_start = std::chrono::system_clock::now();
 
   std::cout << termcolor::reset;
   std::cerr << termcolor::reset;
@@ -58,6 +68,8 @@ int main(int argc, char *argv[]) {
          .help("Test subdir to be excluded; can be given multiple times")
          .default_value(Vector<String>{})
          .append();
+  program.add_argument("-jr", "--just-run")
+         .help("Run a case getting the output; only one at a time is required");
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception& e) {
@@ -131,16 +143,54 @@ int main(int argc, char *argv[]) {
 
     target_tests.emplace_back(std::move(subdir), std::move(name));
   }
+  std::cout << termcolor::bold << "Total " << target_tests.size() << " tests found." << termcolor::reset << std::endl;
   if (is_verbose) {
     std::cout << "-- Target tests --" << std::endl;
     for(const auto& [subdir, name] : target_tests) {
       std::cout << subdir << " -> " << name << std::endl;
     }
   }
+  std::cout << std::endl;
 
+
+  //--------------------------------------------------------
+
+  if(program.is_used("--just-run")) {
+    mode = PincheckMode::run;
+  }
+
+  //--------------------------------------------------------
+
+  int exit_code = 1;
+  switch(mode){
+    case PincheckMode::run:
+      exit_code = run_mode_run (program, paths, target_tests);
+      break;
+    
+    case PincheckMode::check:
+      exit_code = run_mode_check (program, paths, target_tests);
+      break;
+    
+    default:
+      break;
+  }
+
+  const std::chrono::system_clock::time_point pincheck_end = std::chrono::system_clock::now();
+  std::cout << "Total pincheck running time: " << std::chrono::duration_cast<std::chrono::seconds>(pincheck_end - pincheck_start).count() << " seconds" << std::endl;
+  std::cout << "pincheck exiting with code " << exit_code << std::endl;
+  return exit_code;
+}
+
+/** Implementation parts */
+
+
+static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests) {
+  using namespace std::string_literals;
+
+  const auto is_verbose = program.get<bool>("--verbose");
   const auto pool_size = program.get<unsigned>("-j");
-  std::vector<TestResult> results, results_cache;
-  std::vector<std::unique_ptr<TestRunner>> pool(pool_size);
+  Vector<TestResult> results, results_cache;
+  Vector<std::unique_ptr<TestRunner>> pool(pool_size);
   size_t next = 0;
   
   // init pool print
@@ -217,6 +267,43 @@ int main(int argc, char *argv[]) {
     std::cout << std::endl;
   }
 
-  std::cout << "pincheck exiting with code " << return_value << std::endl;
   return return_value;
+}
+
+static int run_mode_run (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests) {
+  using namespace std::string_literals;
+  std::ostringstream panic_msg;
+  const auto target_test = program.get<String>("--just-run");
+  auto it = std::find_if(target_tests.cbegin(), target_tests.cend(), [&target_test](const Pair<String> &here){
+    return target_test == here.second || target_test == here.first + "/" + here.second;
+  });
+  if(it == target_tests.cend()) {
+    panic_msg << "Cannot find the case named " << target_test;
+    panic(panic_msg);
+  }
+
+  const auto full_name = it->first + "/" + it->second;
+  std::cout << "Detected just-running mode for " << termcolor::bold << full_name << termcolor::reset << std::endl << std::endl;
+
+  const auto get_run_cmd_command = "make "s + full_name
+    + ".output --dry-run --silent --assume-old=os.dsk --what-if=os.dsk";
+  
+  const auto get_run_cmd_result = exec_str(get_run_cmd_command.c_str());
+  if (get_run_cmd_result.first != 0 || !get_run_cmd_result.second) {
+    panic_msg << "Cannot find out the command line to run the case";
+    panic(panic_msg);
+  }
+
+  const auto full_run_command = string_trim(*(get_run_cmd_result.second));
+  const auto cut_idx = full_run_command.find('<');
+  if(cut_idx == String::npos) {
+    panic_msg << "The command line to run the case seems to be not valid:\n";
+    panic_msg << full_run_command;
+    panic(panic_msg);
+  }
+
+  const auto run_command = string_trim(full_run_command.substr(0, cut_idx));
+  std::cout << run_command << std::endl;
+
+  return 0;
 }
