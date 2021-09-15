@@ -3,6 +3,7 @@
 #include <set>
 #include <unordered_set>
 #include <iterator>
+#include <regex>
 
 #include <sys/ioctl.h>
 
@@ -25,7 +26,7 @@ enum class PincheckMode {
 };
 
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
-static int run_mode_run (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
+static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
 
 int main(int argc, char *argv[]) {
   using namespace std::string_literals;
@@ -164,7 +165,7 @@ int main(int argc, char *argv[]) {
   int exit_code = 1;
   switch(mode){
     case PincheckMode::run:
-      exit_code = run_mode_run (program, paths, target_tests);
+      exit_code = run_mode_run (program, target_tests);
       break;
     
     case PincheckMode::check:
@@ -176,8 +177,8 @@ int main(int argc, char *argv[]) {
   }
 
   const std::chrono::system_clock::time_point pincheck_end = std::chrono::system_clock::now();
-  std::cout << "Total pincheck running time: " << std::chrono::duration_cast<std::chrono::seconds>(pincheck_end - pincheck_start).count() << " seconds" << std::endl;
-  std::cout << "pincheck exiting with code " << exit_code << std::endl;
+  std::cout << "pincheck exiting with code " << exit_code
+    << " (Running time: " << std::chrono::duration_cast<std::chrono::seconds>(pincheck_end-pincheck_start).count() << " sec)" << std::endl;
   return exit_code;
 }
 
@@ -247,17 +248,15 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
 
   unsigned passed = std::count_if(results.begin(), results.end(),
     [](const TestResult& r){return r.passed;});
+  unsigned failed = target_tests.size() - passed;
 
   std::cout << "\033[2K\033[1G";
   std::cout << "\nFinished total " << termcolor::bold << target_tests.size() << " tests." << termcolor::reset << std::endl;
-  std::cout << termcolor::green << "Pass: " << termcolor::bold << passed << '\t';
-  std::cout << termcolor::reset << termcolor::red << "Fail: " << termcolor::bold << target_tests.size() - passed;
-  std::cout << termcolor::reset << std::endl << std::endl;
   
   const int return_value = (passed == target_tests.size() ? 0 : 1);
 
   if (return_value != 0) {
-    std::cout << "-- Failed tests --" << std::endl;
+    std::cout << "\n" << termcolor::bright_red << "-- Failed tests --" << termcolor::reset << std::endl;
     for (const auto& tr : results) {
       if(!tr.passed) {
         tr.print_row(is_verbose);
@@ -266,13 +265,27 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
     }
     std::cout << std::endl;
   }
+  std::cout << termcolor::green << "Pass: ";
+  if(passed != 0) std::cout << termcolor::bold;
+  std::cout << passed << '\t';
+
+  std::cout << termcolor::reset << termcolor::red << "Fail: ";
+  if(failed != 0) std::cout << termcolor::bold;
+  std::cout << failed;
+  std::cout << termcolor::reset << std::endl << std::endl;
+
+  if (return_value == 0) {
+    std::cout << termcolor::blue << termcolor::bold << "Correct!" << termcolor::reset << std::endl;
+  }
 
   return return_value;
 }
 
-static int run_mode_run (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests) {
+static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests) {
   using namespace std::string_literals;
   std::ostringstream panic_msg;
+
+  const auto is_verbose = program.get<bool>("--verbose");
   const auto target_test = program.get<String>("--just-run");
   auto it = std::find_if(target_tests.cbegin(), target_tests.cend(), [&target_test](const Pair<String> &here){
     return target_test == here.second || target_test == here.first + "/" + here.second;
@@ -283,7 +296,8 @@ static int run_mode_run (argparse::ArgumentParser &program, const TestPath &path
   }
 
   const auto full_name = it->first + "/" + it->second;
-  std::cout << "Detected just-running mode for " << termcolor::bold << full_name << termcolor::reset << std::endl << std::endl;
+  std::cout << "Detected just-running mode for "
+    << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl << std::endl;
 
   const auto get_run_cmd_command = "make "s + full_name
     + ".output --dry-run --silent --assume-old=os.dsk --what-if=os.dsk";
@@ -302,8 +316,82 @@ static int run_mode_run (argparse::ArgumentParser &program, const TestPath &path
     panic(panic_msg);
   }
 
-  const auto run_command = string_trim(full_run_command.substr(0, cut_idx));
-  std::cout << run_command << std::endl;
+  const auto run_command = string_trim(full_run_command.substr(0, cut_idx))
+    + " | tee " + full_name + ".output";
+  if (is_verbose)
+    std::cout << "Running command: " << run_command << std::endl << std::endl;;
+  
+  const auto ret = system(run_command.c_str());
+  std::cout << std::endl;
+  if (ret != 0) {
+    panic_msg << "The shell command line execution returned with non-zero: " << ret;
+    panic(panic_msg);
+  }
 
-  return 0;
+  // PANIC detection
+  int return_value = 0;
+  
+  std::ifstream output_fs(full_name + ".output");
+  if(!output_fs.is_open()) {
+    panic_msg << "Cannot open the output file; cannot detect whether PANIC happened";
+    panic(panic_msg);
+  }
+
+  String line;
+  bool panic_detected = false, call_stack_detected = false;
+  std::smatch panic_match;
+  std::regex panic_re("PANIC", std::regex::grep);
+  String panic_line;
+  std::smatch call_stack_match;
+  std::regex call_stack_re("Call stack\\:");
+  String call_stack_line;
+  while(std::getline(output_fs, line)) {
+    if(std::regex_search(line, panic_match, panic_re)) {
+      panic_detected = true;
+      panic_line = line;
+    } else if (std::regex_search(line, call_stack_match, call_stack_re)) {
+      call_stack_detected = true;
+      call_stack_line = call_stack_match.suffix();
+    }
+  }
+
+  if(!panic_detected) {
+    std::cout << termcolor::green << termcolor::bold;
+    std::cout << "No PANIC message detected" << std::endl;
+  } else {
+    std::cout << termcolor::yellow << termcolor::bold;
+    std::cout << "-- PANIC detected on the pintos execution --" << std::endl;
+    std::cout << termcolor::reset << termcolor::yellow << panic_line << std::endl;
+
+    if (!call_stack_detected) {
+      panic_msg << "PANIC detected, but no call stack found";
+      panic(panic_msg);
+    }
+    
+    std::regex re("(0x[0-9a-f]+)+");
+    std::ostringstream backtrace_cmd_os;
+    backtrace_cmd_os << "backtrace ";
+    const auto call_stack_tokens = string_tokenize(call_stack_line);
+    for(const auto &s: call_stack_tokens) {
+      if(std::regex_match(s, re)) {
+        backtrace_cmd_os << s << " ";
+      } else break;
+    }
+    const auto backtrace_cmd = backtrace_cmd_os.str();
+    std::cout << "Backtrace command: " << backtrace_cmd << std::endl;
+
+    const auto backtrace_res = exec_str(backtrace_cmd.c_str());
+    if(backtrace_res.first != 0 || !backtrace_res.second) {
+      panic_msg << "Backtrace command failed...";
+      panic(panic_msg);
+    }
+
+    std::cout << "Here are the backtrace results:" << std::endl;
+    std::cout << *(backtrace_res.second) << std::endl;
+    return_value = 1;
+  }
+  std::cout << termcolor::reset << std::endl;
+  output_fs.close();
+
+  return return_value;
 }
