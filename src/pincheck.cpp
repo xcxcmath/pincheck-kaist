@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
   std::cout << termcolor::reset;
   std::cerr << termcolor::reset;
 
-  argparse::ArgumentParser program("pincheck", "210902");
+  argparse::ArgumentParser program("pincheck", "21.09.15");
   program.add_argument("-p", "--project")
          .help("Pintos project to run test; threads, userprog, vm, or filesys");
   program.add_argument("-j", "--jobs")
