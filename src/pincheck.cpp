@@ -16,6 +16,20 @@
 #include "gdb_runner.h"
 #include "string_helper.h"
 
+struct TestCase {
+  String name, subdir;
+  int timeout;
+  TestCase(String subdir, String name):name(std::move(name)), subdir(std::move(subdir)), timeout(0){}
+
+  String full_name() const {
+    return subdir + "/" + name;
+  }
+
+  bool operator<(const TestCase &rhs) const {
+    return timeout < rhs.timeout;
+  }
+};
+
 struct winsize get_winsize() {
   struct winsize winsize;
   ioctl(0, TIOCGWINSZ, &winsize);
@@ -26,10 +40,11 @@ enum class PincheckMode {
   check, run, gdb
 };
 
+static int parse_timeout(const String &command);
 static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt);
-static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
-static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
-static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
+static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests);
+static int run_mode_run (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests);
+static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests);
 
 int main(int argc, char *argv[]) {
   using namespace std::string_literals;
@@ -73,7 +88,7 @@ int main(int argc, char *argv[]) {
          .default_value(Vector<String>{})
          .append();
   program.add_argument("-S", "--sort")
-         .help("Sort test cases first in decreasing order of TIMEOUT")
+         .help("Sort test cases first in decreasing order of TIMEOUT, which may help to check all faster")
          .default_value(false)
          .implicit_value(true);
   program.add_argument("-jr", "--just-run")
@@ -146,7 +161,7 @@ int main(int argc, char *argv[]) {
     panic(panic_msg);
   }
   const auto all_tests = string_tokenize(*make_pincheck_res.second);
-  Vector<Pair<String>> target_tests{};
+  Vector<TestCase> target_tests{};
   const auto name_patterns = program.get<Vector<String>>("--");
   const auto subdir_patterns = program.get<Vector<String>>("--subdir");
   const auto name_ex_patterns = program.get<Vector<String>>("--exclude");
@@ -163,13 +178,23 @@ int main(int argc, char *argv[]) {
        wildcard_match(subdir, subdir_ex_patterns) ||
        wildcard_match(name, name_ex_patterns)) continue;
 
-    target_tests.emplace_back(std::move(subdir), std::move(name));
+    TestCase here(std::move(subdir), std::move(name));
+
+    if(program.get<bool>("--sort")) {
+      const auto cmd = get_running_command(here.full_name(), false, true);
+      here.timeout = parse_timeout(cmd);
+    }
+
+    target_tests.push_back(here);
+  }
+  if(program.get<bool>("--sort")) {
+    std::sort(target_tests.rbegin(), target_tests.rend());
   }
   std::cout << termcolor::bold << "Total " << target_tests.size() << " tests found." << termcolor::reset << std::endl;
   if (is_verbose) {
     std::cout << "-- Target tests --" << std::endl;
-    for(const auto& [subdir, name] : target_tests) {
-      std::cout << subdir << " -> " << name << std::endl;
+    for(const auto& test_case : target_tests) {
+      std::cout << test_case.subdir << " -> " << test_case.name << std::endl;
     }
   }
 
@@ -210,8 +235,7 @@ int main(int argc, char *argv[]) {
 
 /** Implementation parts */
 
-
-static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests) {
+static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests) {
   using namespace std::string_literals;
 
   const auto is_verbose = program.get<bool>("--verbose");
@@ -249,7 +273,7 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
     }
     for(size_t i = 0; i < pool_size && next < target_tests.size(); ++i) {
       if(pool[i]) continue;
-      pool[i] = std::make_unique<TestRunner>(target_tests[next].first, target_tests[next].second);
+      pool[i] = std::make_unique<TestRunner>(target_tests[next].subdir, target_tests[next].name);
       pool[i]->register_test(paths);
       ++next;
     }
@@ -344,10 +368,10 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
   return return_value;
 }
 
-static auto get_target_test_or_panic(const String &t, const Vector<Pair<String>> &target_tests) {
+static auto get_target_test_or_panic(const String &t, const Vector<TestCase> &target_tests) {
   std::ostringstream panic_msg;
-  auto it = std::find_if(target_tests.cbegin(), target_tests.cend(), [&t](const Pair<String> &here){
-    return t == here.second || t == here.first + "/" + here.second;
+  auto it = std::find_if(target_tests.cbegin(), target_tests.cend(), [&t](const TestCase &here){
+    return t == here.name || t == here.full_name();
   });
   if(it == target_tests.cend()) {
     panic_msg << "Cannot find the case named " << t;
@@ -355,6 +379,30 @@ static auto get_target_test_or_panic(const String &t, const Vector<Pair<String>>
   }
 
   return it;
+}
+
+static int parse_timeout(const String &command) {
+  constexpr int DEFAULT_TIMEOUT = 60;
+  const auto tokens = string_tokenize(command);
+
+  auto it = std::find(tokens.cbegin(), tokens.cend(), "-T");
+  if(it == tokens.cend()) {
+    return DEFAULT_TIMEOUT;
+  }
+
+  ++it;
+  if(it == tokens.cend()) {
+    return DEFAULT_TIMEOUT;
+  }
+
+  int ret;
+  try {
+    ret = std::stoi(*it);
+  } catch (const std::exception &e) {
+    ret = DEFAULT_TIMEOUT;
+  }
+
+  return ret;
 }
 
 static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt) {
@@ -418,7 +466,7 @@ static String get_running_command(const String &full_name, bool gdb_opt, bool ti
   return full_run_command;
 }
 
-static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests) {
+static int run_mode_run (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests) {
   using namespace std::string_literals;
   std::ostringstream panic_msg;
 
@@ -426,7 +474,7 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
   const auto target_test = program.get<String>("--just-run");
   auto it = get_target_test_or_panic(target_test, target_tests);
 
-  const auto full_name = it->first + "/" + it->second;
+  const auto full_name = it->full_name();
   std::cout << "Detected just-running mode for "
     << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl << std::endl;
 
@@ -510,7 +558,7 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
   return return_value;
 }
 
-static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests){
+static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests){
   using namespace std::string_literals;
   std::ostringstream panic_msg;
 
@@ -518,7 +566,7 @@ static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<Pair<St
   const auto target_test = program.get<String>("--gdb-run");
   auto it = get_target_test_or_panic(target_test, target_tests);
 
-  const auto full_name = it->first + "/" + it->second;
+  const auto full_name = it->full_name();
   std::cout << "Detected gdb-running mode for "
     << termcolor::bold << termcolor::magenta << full_name << termcolor::reset << std::endl << std::endl;
 

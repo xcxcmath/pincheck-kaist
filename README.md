@@ -92,6 +92,9 @@ pintos-kaist/src/threads$ pincheck --subdir */mlfqs
 # Run tests which don't belong to "...../mlfqs" test subdirectory
 pintos-kaist/src/threads$ pincheck --subdir-exclude */mlfqs
 
+# Run tests in decreasing order of TIMEOUT, which may make the whole process faster
+pintos-kaist/src/userprog$ pincheck --sort
+
 # Run tests after cleaning build directory
 pintos-kaist/src/vm$ pincheck --clean-build
 
@@ -169,10 +172,12 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 - `make check` : 181 seconds
 - `make check -j 4` : 64 seconds
 - `pincheck (-j 4)` : 65 seconds
+- `pincheck (-j 4) --sort` : 49 seconds
 - `make check -j 5` : 58 seconds
 - `pincheck -j 5` : 64 seconds
 - `make check -j 8` : 56 seconds
 - `pincheck -j 8` : 57 seconds
+- `pincheck -j 8 --sort` : 52 seconds
 
 ## Prerequisites
 
