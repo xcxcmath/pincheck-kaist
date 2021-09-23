@@ -42,25 +42,25 @@ some test cases might be failed even if it is correct.
 
 ![thumb_userprog](./images/thumb_userprog.gif)
 
-- Test using multi-threads, with more visual cues
-- Test target filtering with wildcards (`*`, `?`)
-- Running test of any project in any path
+- Test using **multi-threads**, with more **visual cues**
+- **Test target filtering** with wildcards (`*`, `?`)
+- Running test of **any project** in **any path**
 
 ![thumb_repeat](./images/thumb_repeat.gif)
 
-- Repeating the whole checking process multiple times
+- **Repeating** the whole checking process multiple times
 
 ### Running
 
 ![thumb_just_run](./images/thumb_just_run.gif)
 
-- Running one case to see only the output, but with additional `backtrace` detection
+- **Running one case** to see only the output, but with additional **`backtrace` detection**
 
 ### Debugging
 
-![thumb_gdb](./images/thumb_gdb.gif)
+![thumb_gdb_fun](./images/thumb_gdb_run.gif)
 
-- Giving GDB option without needs to search such long command and type it
+- **Embedded GDB REPL;** you don't need to make 2 terminal windows nor type `target remote localhost:1234`
 
 ## Usage
 
@@ -117,13 +117,20 @@ $ pincheck --just-run tests/userprog/dup2/dup2-complex
 
 # Just run, but with its timeout option
 $ pincheck --just-run multi-oom --with-timeout
+
+# Just run, but with --gdb option
+$ pincheck --just-run syn-read --gdb
 ```
+
+This is the example running for `--gdb` option:
+
+![thumb_gdb](./images/thumb_gdb.gif)
 
 ### For debugging
 
 ```sh
-# Just run, but with gdb option
-$ pincheck --just-run syn-read --gdb
+# GDB REPL
+$ pincheck --gdb-run write-normal
 ```
 
 ## Benchmark with all passing implementation
@@ -147,17 +154,25 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 
 Note that the longest test to finish (`mlfqs-recent-1`) takes about 190 seconds.
 
-### `userprog` (without `dup2`)
+### `userprog` (including `dup2`)
+
+On KCloud VM (2 cores, 4GB RAM, 100GB Storage, Ubuntu 18.04)
+
+- `make check` : 192 seconds
+- `make check -j 2` : 99 seconds
+- `pincheck (-j 2)` : 108 seconds
+- `make check -j 3` : 90 seconds
+- `pincheck -j 3` : 99 seconds
 
 On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 
 - `make check` : 181 seconds
-- `make check -j 4` : 69 seconds
-- `pincheck (-j 4)` : 77 seconds
-- `make check -j 5` : 66 seconds
-- `pincheck -j 5` : 72 seconds
-- `make check -j 8` : 65 seconds
-- `pincheck -j 8` : 69 seconds
+- `make check -j 4` : 64 seconds
+- `pincheck (-j 4)` : 65 seconds
+- `make check -j 5` : 58 seconds
+- `pincheck -j 5` : 64 seconds
+- `make check -j 8` : 56 seconds
+- `pincheck -j 8` : 57 seconds
 
 ## Prerequisites
 
