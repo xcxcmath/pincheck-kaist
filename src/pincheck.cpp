@@ -26,6 +26,7 @@ enum class PincheckMode {
   check, run, gdb
 };
 
+static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt);
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
 static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
 static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
@@ -71,6 +72,10 @@ int main(int argc, char *argv[]) {
          .help("Test subdir to be excluded; can be given multiple times")
          .default_value(Vector<String>{})
          .append();
+  program.add_argument("-S", "--sort")
+         .help("Sort test cases first in decreasing order of TIMEOUT")
+         .default_value(false)
+         .implicit_value(true);
   program.add_argument("-jr", "--just-run")
          .help("Run a case getting the output; only one at a time is required");
   program.add_argument("-gr", "--gdb-run")
