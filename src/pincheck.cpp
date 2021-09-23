@@ -13,6 +13,7 @@
 #include "test_path.h"
 #include "test_runner.h"
 #include "test_result.h"
+#include "gdb_runner.h"
 #include "string_helper.h"
 
 struct winsize get_winsize() {
@@ -22,11 +23,12 @@ struct winsize get_winsize() {
 }
 
 enum class PincheckMode {
-  check, run
+  check, run, gdb
 };
 
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<Pair<String>> &target_tests);
 static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
+static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests);
 
 int main(int argc, char *argv[]) {
   using namespace std::string_literals;
@@ -71,6 +73,8 @@ int main(int argc, char *argv[]) {
          .append();
   program.add_argument("-jr", "--just-run")
          .help("Run a case getting the output; only one at a time is required");
+  program.add_argument("-gr", "--gdb-run")
+         .help("Run a case getting the output with embedded GDB REPL; only one at a time is required");
   program.add_argument("-r", "--repeat")
          .help("# of repeating the whole checking")
          .scan<'i', unsigned>()
@@ -169,6 +173,8 @@ int main(int argc, char *argv[]) {
 
   if(program.is_used("--just-run")) {
     mode = PincheckMode::run;
+  } else if(program.is_used("--gdb-run")) {
+    mode = PincheckMode::gdb;
   }
 
   //--------------------------------------------------------
@@ -179,12 +185,16 @@ int main(int argc, char *argv[]) {
       exit_code = run_mode_run (program, target_tests);
       break;
     
+    case PincheckMode::gdb:
+      exit_code = run_mode_gdb (program, target_tests);
+      break;
+    
     case PincheckMode::check:
       exit_code = run_mode_check (program, paths, target_tests);
       break;
     
     default:
-      break;
+      panic("Unsupported running mode");
   }
 
   const std::chrono::system_clock::time_point pincheck_end = std::chrono::system_clock::now();
@@ -329,27 +339,25 @@ static int run_mode_check (argparse::ArgumentParser &program, const TestPath &pa
   return return_value;
 }
 
-static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests) {
-  using namespace std::string_literals;
+static auto get_target_test_or_panic(const String &t, const Vector<Pair<String>> &target_tests) {
   std::ostringstream panic_msg;
-
-  const auto is_verbose = program.get<bool>("--verbose");
-  const auto target_test = program.get<String>("--just-run");
-  auto it = std::find_if(target_tests.cbegin(), target_tests.cend(), [&target_test](const Pair<String> &here){
-    return target_test == here.second || target_test == here.first + "/" + here.second;
+  auto it = std::find_if(target_tests.cbegin(), target_tests.cend(), [&t](const Pair<String> &here){
+    return t == here.second || t == here.first + "/" + here.second;
   });
   if(it == target_tests.cend()) {
-    panic_msg << "Cannot find the case named " << target_test;
+    panic_msg << "Cannot find the case named " << t;
     panic(panic_msg);
   }
 
-  const auto full_name = it->first + "/" + it->second;
-  std::cout << "Detected just-running mode for "
-    << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl << std::endl;
+  return it;
+}
 
+static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt) {
+  using namespace std::string_literals;
+  std::ostringstream panic_msg;
   const auto get_run_cmd_command = "make "s + full_name
     + ".output --dry-run --silent --assume-old=os.dsk --what-if=os.dsk";
-  
+
   const auto get_run_cmd_result = exec_str(get_run_cmd_command.c_str());
   if (get_run_cmd_result.first != 0 || !get_run_cmd_result.second) {
     panic_msg << "Cannot find out the command line to run the case";
@@ -365,8 +373,8 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
   }
 
   full_run_command = string_trim(full_run_command.substr(0, cut_idx));
-  
-  if(program.get<bool>("--gdb")) {
+
+  if(gdb_opt) {
     const auto gdb_idx = full_run_command.find(' ');
     if (gdb_idx == String::npos) {
       full_run_command += " --gdb";
@@ -375,7 +383,7 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
     }
   }
 
-  if(!program.get<bool>("--with-timeout")) {
+  if(!timeout_opt) {
     const auto t_opt = "-T"s;
     const auto t_idx = full_run_command.find(t_opt);
     if (t_idx != String::npos) {
@@ -402,7 +410,22 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
     }
   }
 
-  const auto run_command = string_trim(full_run_command.substr(0, cut_idx))
+  return full_run_command;
+}
+
+static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests) {
+  using namespace std::string_literals;
+  std::ostringstream panic_msg;
+
+  const auto is_verbose = program.get<bool>("--verbose");
+  const auto target_test = program.get<String>("--just-run");
+  auto it = get_target_test_or_panic(target_test, target_tests);
+
+  const auto full_name = it->first + "/" + it->second;
+  std::cout << "Detected just-running mode for "
+    << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl << std::endl;
+
+  const auto run_command = get_running_command(full_name, program.get<bool>("--gdb"), program.get<bool>("--with-timeout"))
     + " | tee " + full_name + ".output";
   if (is_verbose)
     std::cout << "Running command: " << run_command << std::endl << std::endl;;
@@ -480,4 +503,23 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<Pair<St
   output_fs.close();
 
   return return_value;
+}
+
+static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<Pair<String>> &target_tests){
+  using namespace std::string_literals;
+  std::ostringstream panic_msg;
+
+  const auto is_verbose = program.get<bool>("--verbose");
+  const auto target_test = program.get<String>("--gdb-run");
+  auto it = get_target_test_or_panic(target_test, target_tests);
+
+  const auto full_name = it->first + "/" + it->second;
+  std::cout << "Detected gdb-running mode for "
+    << termcolor::bold << termcolor::magenta << full_name << termcolor::reset << std::endl << std::endl;
+
+  const auto server_run_command = get_running_command(full_name, true, false) + " < /dev/null 2>&1";
+  if (is_verbose)
+    std::cout << "GDB server running command: " << server_run_command << std::endl;
+
+  return gdb_run(server_run_command);
 }

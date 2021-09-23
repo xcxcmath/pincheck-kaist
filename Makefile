@@ -7,7 +7,7 @@ CXXFLAGS = -std=c++17 -I$(INCLUDE) -O2 -W -Wall
 
 NAME = pincheck
 PROG = $(BUILD)/$(NAME)
-MODULES = execution test_path test_runner test_result string_helper
+MODULES = execution test_path test_runner test_result gdb_runner string_helper
 
 define module_compile
 $(BUILD)/$1.o : $(SRC)/$1.cpp $(INCLUDE)/$1.h $(INCLUDE)/common.h | $(BUILD)
