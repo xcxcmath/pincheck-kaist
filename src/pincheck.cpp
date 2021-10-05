@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <iterator>
 #include <regex>
+#include <random>
 
 #include <sys/ioctl.h>
 
@@ -40,6 +41,8 @@ enum class PincheckMode {
   check, run, gdb
 };
 
+constexpr auto PINCHECK_VERSION = "v21.09.23";
+static void check_new_version(bool is_verbose);
 static int parse_timeout(const String &command);
 static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt);
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests);
@@ -56,7 +59,7 @@ int main(int argc, char *argv[]) {
   std::cout << termcolor::reset;
   std::cerr << termcolor::reset;
 
-  argparse::ArgumentParser program("pincheck", "v21.09.23");
+  argparse::ArgumentParser program("pincheck", PINCHECK_VERSION);
   program.add_argument("-p", "--project")
          .help("Pintos project to run test; threads, userprog, vm, or filesys");
   program.add_argument("-j", "--jobs")
@@ -107,6 +110,14 @@ int main(int argc, char *argv[]) {
          .help("Run with TIMEOUT (-T option) for pintos; used with --just-run")
          .default_value(false)
          .implicit_value(true);
+  program.add_argument("-fv")
+         .help("Force to check new release is available")
+         .default_value(false)
+         .implicit_value(true);
+  program.add_argument("-nv")
+         .help("Not to check new release is available")
+         .default_value(false)
+         .implicit_value(true);
   try {
     program.parse_args(argc, argv);
   } catch (const std::exception& e) {
@@ -114,6 +125,14 @@ int main(int argc, char *argv[]) {
     panic(panic_msg);
   }
   const auto is_verbose = program.get<bool>("--verbose");
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  if (std::bernoulli_distribution d(1.0/5);
+    (program.get<bool>("-fv") && !program.get<bool>("-nv")) || d(gen)) {
+    check_new_version(is_verbose);
+  }
+
   TestPath paths;
   detect_src(paths);
   if(is_verbose) {
@@ -234,6 +253,61 @@ int main(int argc, char *argv[]) {
 }
 
 /** Implementation parts */
+
+static void print_new_version(const String &new_version) {
+  std::cout << termcolor::bright_magenta << termcolor::bold;
+  std::cout << "New version available : " << new_version;
+  std::cout << termcolor::reset << std::endl;
+  std::cout << "Current version : " << PINCHECK_VERSION << std::endl;
+  std::cout << "To upgrade pincheck, go to the cloned directory and run:\n";
+  std::cout << termcolor::bright_white << "\t$ git pull\n\t$ make install";
+  std::cout << termcolor::reset << std::endl << std::endl;
+}
+
+static bool do_check_new_version(const String &github_fetch_cmd, bool is_verbose) {
+  constexpr auto PY_CMD = "python3 -c \"import sys, json; print(json.load(sys.stdin)['tag_name'])\"";
+  try {
+    const auto cmd = github_fetch_cmd + " | " + PY_CMD;
+    if (is_verbose)
+      std::cout << "Version checking command : " << cmd << std::endl;
+    const auto res = exec_str(cmd.c_str());
+    if(!(res.first != 0 || !res.second)) {
+      const auto new_version = string_trim(*res.second);
+      if (new_version != PINCHECK_VERSION) {
+        print_new_version(new_version);
+        return true;
+      } else {
+        if (is_verbose)
+          std::cout << "Same version found." << std::endl;
+        return false;
+      }
+    }
+  } catch (const std::exception &e) {
+  }
+  if (is_verbose)
+    std::cout << "Failed to fetch and compare version." << std::endl;
+  return false;
+}
+
+static void check_new_version(bool is_verbose) {
+  using namespace std::string_literals;
+  constexpr auto GITHUB_URL = "https://api.github.com/repos/xcxcmath/pincheck-kaist/releases/latest";
+  
+  try {
+    if (is_verbose)
+      std::cout << "Version checking...\n";
+
+    // 1. curl
+    const auto curl_cmd = "curl -s "s + GITHUB_URL + " 2> /dev/null";
+    if(do_check_new_version(curl_cmd, is_verbose)) return;
+
+    // 2. wget
+    const auto wget_cmd = "wget -nv -O - "s + GITHUB_URL + " 2> /dev/null";
+    if(do_check_new_version(wget_cmd, is_verbose)) return;
+  } catch (const std::exception &e) {
+
+  }
+}
 
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests) {
   using namespace std::string_literals;
