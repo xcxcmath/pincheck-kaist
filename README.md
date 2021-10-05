@@ -3,6 +3,8 @@
 Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/pintos-kaist) projects
 ... with several features.
 
+**Some more prerequisites are listed. Please read.**
+
 ![thumb_threads](./images/thumb_threads.gif)
 
 ## Index
@@ -104,6 +106,14 @@ pintos-kaist/src/filesys$ pincheck --repeat 5
 # Run with verbose
 $ pincheck --verbose
 
+# Force checking new release when start
+$ pincheck -fv
+
+# No checking new release
+$ pincheck -nv
+
+# Note : By default, pincheck SOMETIMES (20%) checks its new release.
+
 # version & help
 $ pincheck --version
 $ pincheck --help
@@ -137,6 +147,8 @@ $ pincheck --gdb-run write-normal
 ```
 
 ## Benchmark with all passing implementation
+
+For `pincheck`, the `-nv` option is omitted here.
 
 ### `threads`
 
@@ -226,7 +238,23 @@ source /home/<your id>/pintos-kaist/activate
 
 Afterwards, you should get output by running `which pintos` on the shell. If nothing printed, please read above carefully.
 
-### CPU with 2+ cores recommended
+### `curl` or `wget` (recommended)
+
+(From version v21.10.05) `pincheck` can search its new releases through Github API, using `curl` or `wget` as at least one of them is available. If none of them is installed, please run on Ubuntu:
+
+```sh
+$ sudo apt update
+
+$ sudo apt install curl
+# or
+$ sudo apt install wget
+```
+
+### CPU with 2+ cores (recommended)
+
+`pincheck` basically utilize multi-thread programming, but thanks to the standard library, it also tries to be moderate; it may defer generating new threads if the resource is running out.
+
+Please make your host machine be powerful enough to deal with mutiple simultaneous tests, otherwise some of tests might fail even if your implementation is correct.
 
 ## Installation
 

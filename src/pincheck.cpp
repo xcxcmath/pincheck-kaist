@@ -41,7 +41,7 @@ enum class PincheckMode {
   check, run, gdb
 };
 
-constexpr auto PINCHECK_VERSION = "v21.09.23";
+constexpr auto PINCHECK_VERSION = "v21.10.05";
 static void check_new_version(bool is_verbose);
 static int parse_timeout(const String &command);
 static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt);
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
   std::random_device rd;
   std::mt19937 gen(rd());
   if (std::bernoulli_distribution d(1.0/5);
-    (program.get<bool>("-fv") && !program.get<bool>("-nv")) || d(gen)) {
+    (program.get<bool>("-fv") || d(gen)) && !program.get<bool>("-nv")) {
     check_new_version(is_verbose);
   }
 
