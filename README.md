@@ -19,6 +19,7 @@ Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/p
   - [Testing](#for-testing)
   - [Running](#for-running)
   - [Debugging](#for-debugging)
+  - [Misc.](#misc)
 - [Benchmarks](#benchmark-with-all-passing-implementation)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
@@ -99,24 +100,10 @@ pintos-kaist/src/userprog$ pincheck --sort
 
 # Run tests after cleaning build directory
 pintos-kaist/src/vm$ pincheck --clean-build
+pintos-kaist/src/vm$ pincheck -cb
 
 # Repeat the whole tests 5 times
 pintos-kaist/src/filesys$ pincheck --repeat 5
-
-# Run with verbose
-$ pincheck --verbose
-
-# Force checking new release when start
-$ pincheck -fv
-
-# No checking new release
-$ pincheck -nv
-
-# Note : By default, pincheck SOMETIMES (20%) checks its new release.
-
-# version & help
-$ pincheck --version
-$ pincheck --help
 ```
 
 ### For running
@@ -124,6 +111,7 @@ $ pincheck --help
 ```sh
 # Just run to see the outputs and possible backtraces
 $ pincheck --just-run alarm-single
+$ pincheck -jr alarm-single
 
 # You can pass as the full path, too.
 $ pincheck --just-run tests/userprog/dup2/dup2-complex
@@ -144,6 +132,30 @@ This is the example running for `--gdb` option:
 ```sh
 # GDB REPL
 $ pincheck --gdb-run write-normal
+$ pincheck -gr mmap-bad-off
+```
+
+### Misc.
+
+```sh
+# Run with verbose
+$ pincheck --verbose
+$ pincheck -V
+
+# Force checking new release when start
+$ pincheck -fv
+
+# No checking new release
+$ pincheck -nv
+
+# Note : By default, pincheck SOMETIMES (25%) checks its new release.
+
+# version & help
+$ pincheck --version
+$ pincheck -v
+
+$ pincheck --help
+$ pincheck -h
 ```
 
 ## Benchmark with all passing implementation
@@ -190,6 +202,10 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 - `make check -j 8` : 56 seconds
 - `pincheck -j 8` : 57 seconds
 - `pincheck -j 8 --sort` : 52 seconds
+
+### `vm` (including `cow`)
+
+To be tested soon.
 
 ## Prerequisites
 
@@ -258,50 +274,58 @@ Please make your host machine be powerful enough to deal with mutiple simultaneo
 
 ## Installation
 
+> We recommend `git clone` and `make install`, as it can do many things for you.
+
 **Please read carefully.**
 
-First, clone this repo somewhere and make build.
+First, clone this repo somewhere.
 
 ```sh
 $ git clone https://github.com/xcxcmath/pincheck-kaist
-
-$ cd pincheck-kaist
-$ make
-
-# or if you want to utilize dual(2)-core CPU for compiling,
-$ make -j 2
 ```
 
-Then you can use `pincheck` executable anyway:
+Second, build the executable and copy to your pintos' `utils` directory.
+
+```sh
+$ cd pincheck-kaist
+$ make install
+```
+
+**We highly recommend to use `make install`, because**
+
+- `make install` detects your pintos project directory;
+- `make install` uses multi-core compiling with machine's hardware cores to make building faster; and
+- `make install` makes sure that all object files can be (re)built and linked correctly.
+
+After `make install`, you should be able to see a green message: `pincheck installed at <installed path>`.
+
+If red `Cannot find pintos ...` message appears when running `make install`, please check whether you can run command `pintos`.
+
+As you are using git for your project, you may add `pincheck` to `.gitignore`.
+
+If you want to copy pincheck in other directory,
+
+```sh
+$ cp build/pincheck /home/<your name>/pintos-kaist/utils
+```
+
+Actually, you can use `pincheck` executable anyway without copying, but you may want to run it shortly.
 
 ```sh
 <dir of pincheck-kaist>/build/pincheck -p filesys
 ```
 
-You may also want to run it shortly. One of the options is copying `pincheck` into pintos' utils directory.
-
-```sh
-# Option 1) copying executable to pintos utils directory
-# The pintos utils path must be registered to PATH
-
-# Makefile automatically detects the pintos utils directory:
-$ make install
-# or you can copy manually:
-$ cp build/pincheck /home/<your name>/pintos-kaist/utils
-```
-
-In this case, if you are using git for your project, you may add `pincheck` to `.gitignore`. If `Cannot find pintos` message appears when running `make install`,
-please check whether you can run command `pintos`.
-
 Another option is editing `PATH` in `.bashrc` adding the build directory.
 
 ```sh
-# Option 2) adding the build directory to PATH
 # in ~/.bashrc
 export PATH="$PATH:(dir of pincheck-kaist)/build"
 ```
 
 ## Update
+
+You may notice, sometimes, a message that notify new release of `pincheck` when you run `pincheck`.
+Then, please run in `pincheck-kaist` directory:
 
 ```sh
 pincheck-kaist$ git pull

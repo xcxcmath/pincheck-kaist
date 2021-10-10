@@ -4,13 +4,12 @@
 #include "execution.h"
 #include "test_runner.h"
 
-TestRunner::TestRunner(std::string subdir, std::string name)
-: subdir(std::move(subdir)), name(std::move(name))
+TestRunner::TestRunner(TestCase testcase)
+: testcase(std::move(testcase))
 , running(false), finished(false), passed(false)
 , exit_code(0), dump(), except_dump(nullptr)
 , start_time{}, end_time{}, fut{}, mut{}
 {
-  full_name = this->subdir + "/" + this->name;
 }
 
 TestRunner::~TestRunner() noexcept {
@@ -23,16 +22,8 @@ TestRunner::~TestRunner() noexcept {
   }
 }
 
-std::string TestRunner::get_full_name() const {
-  return full_name;
-}
-
-std::string TestRunner::get_subdir() const {
-  return subdir;
-}
-
-std::string TestRunner::get_name() const {
-  return name;
+const TestCase& TestRunner::get_test_case() const {
+  return testcase;
 }
 
 bool TestRunner::is_running() {
@@ -71,7 +62,7 @@ void TestRunner::register_test(const TestPath& paths) noexcept {
         running = true;
       }
       try {
-        const auto result_file = full_name + ".result";
+        const auto result_file = testcase.full_name() + ".result";
         const auto result_cmd = "make "s + String{result_file}
           + " --silent --assume-old=os.dsk --what-if=os.dsk 2>&1";
         const auto result_cmd_res = exec_str(result_cmd.c_str());
@@ -141,7 +132,7 @@ String TestRunner::get_print() {
   std::unique_lock lock{mut};
   std::ostringstream os;
 
-  os << name;
+  os << testcase.name;
   if(running) {
     os << "(";
     os << std::chrono::duration_cast<std::chrono::seconds>(

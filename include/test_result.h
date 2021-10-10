@@ -9,16 +9,15 @@
 
 class TestResult {
   public:
-    String subdir, name, full_name;
+    TestCase testcase;
     bool passed;
     int exit_code;
     String dump;
     const char* except_dump;
     std::chrono::system_clock::time_point start_time, end_time;
 
-    TestResult();
     TestResult(const TestRunner&);
-    void print_row(bool detail) const;
+    void print_row(bool detail, bool verbose) const;
 };
 
 

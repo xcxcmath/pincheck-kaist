@@ -1,50 +1,35 @@
 #include <fstream>
-#include <memory>
-#include <set>
-#include <unordered_set>
-#include <iterator>
-#include <regex>
+#include <map>
 #include <random>
 
-#include <sys/ioctl.h>
-
 #include "termcolor/termcolor.hpp"
-#include "argparse/argparse.hpp"
+
+#include "arg_parse.h"
+#include "version_check.h"
+#include "test_case.h"
 #include "execution.h"
 #include "test_path.h"
+#include "rubric_parse.h"
+
 #include "test_runner.h"
 #include "test_result.h"
+
+#include "check_runner.h"
+#include "just_runner.h"
 #include "gdb_runner.h"
+
 #include "string_helper.h"
+#include "console_helper.h"
 
-struct TestCase {
-  String name, subdir;
-  int timeout;
-  TestCase(String subdir, String name):name(std::move(name)), subdir(std::move(subdir)), timeout(0){}
-
-  String full_name() const {
-    return subdir + "/" + name;
-  }
-
-  bool operator<(const TestCase &rhs) const {
-    return timeout < rhs.timeout;
-  }
-};
-
-struct winsize get_winsize() {
-  struct winsize winsize;
-  ioctl(0, TIOCGWINSZ, &winsize);
-  return winsize;
-}
+const char *PINCHECK_VERSION = "v21.10.05";
 
 enum class PincheckMode {
   check, run, gdb
 };
 
-constexpr auto PINCHECK_VERSION = "v21.10.05";
-static void check_new_version(bool is_verbose);
 static int parse_timeout(const String &command);
 static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt);
+
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests);
 static int run_mode_run (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests);
 static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests);
@@ -60,75 +45,12 @@ int main(int argc, char *argv[]) {
   std::cerr << termcolor::reset;
 
   argparse::ArgumentParser program("pincheck", PINCHECK_VERSION);
-  program.add_argument("-p", "--project")
-         .help("Pintos project to run test; threads, userprog, vm, or filesys");
-  program.add_argument("-j", "--jobs")
-         .help("Maximum number of parallel test execution")
-         .scan<'i', unsigned>()
-         .default_value(HARDWARE_CONCURRENCY);
-  program.add_argument("--verbose", "-V")
-         .help("Verbose print")
-         .default_value(false)
-         .implicit_value(true);
-  program.add_argument("-cb", "--clean-build")
-         .help("Clean build directory before test")
-         .default_value(false)
-         .implicit_value(true);
-  program.add_argument("-t", "--test", "--")
-         .help("Test name; can be given multiple times")
-         .default_value(Vector<String>{"*"})
-         .append();
-  program.add_argument("-sd", "--subdir")
-         .help("Test subdir; can be given multiple times")
-         .default_value(Vector<String>{"*"})
-         .append();
-  program.add_argument("-e", "--exclude", "--except")
-         .help("Test name to be excluded; can be given multiple times")
-         .default_value(Vector<String>{})
-         .append();
-  program.add_argument("-sde", "--subdir-exclude", "--subdir-except")
-         .help("Test subdir to be excluded; can be given multiple times")
-         .default_value(Vector<String>{})
-         .append();
-  program.add_argument("-S", "--sort")
-         .help("Sort test cases first in decreasing order of TIMEOUT, which may help to check all faster")
-         .default_value(false)
-         .implicit_value(true);
-  program.add_argument("-jr", "--just-run")
-         .help("Run a case getting the output; only one at a time is required");
-  program.add_argument("-gr", "--gdb-run")
-         .help("Run a case getting the output with embedded GDB REPL; only one at a time is required");
-  program.add_argument("-r", "--repeat")
-         .help("# of repeating the whole checking")
-         .scan<'i', unsigned>()
-         .default_value(static_cast<unsigned>(1));
-  program.add_argument("--gdb")
-         .help("Run with --gdb option for pintos; used with --just-run")
-         .default_value(false)
-         .implicit_value(true);
-  program.add_argument("--with-timeout")
-         .help("Run with TIMEOUT (-T option) for pintos; used with --just-run")
-         .default_value(false)
-         .implicit_value(true);
-  program.add_argument("-fv")
-         .help("Force to check new release is available")
-         .default_value(false)
-         .implicit_value(true);
-  program.add_argument("-nv")
-         .help("Not to check new release is available")
-         .default_value(false)
-         .implicit_value(true);
-  try {
-    program.parse_args(argc, argv);
-  } catch (const std::exception& e) {
-    panic_msg << "Arguments parsing failed: " << e.what();
-    panic(panic_msg);
-  }
+  parse_args(program, argc, argv);
   const auto is_verbose = program.get<bool>("--verbose");
 
   std::random_device rd;
   std::mt19937 gen(rd());
-  if (std::bernoulli_distribution d(1.0/5);
+  if (std::bernoulli_distribution d(1.0/4);
     (program.get<bool>("-fv") || d(gen)) && !program.get<bool>("-nv")) {
     check_new_version(is_verbose);
   }
@@ -168,18 +90,20 @@ int main(int argc, char *argv[]) {
   make_pincheck
     << "# -*- makefile -*-\n\n"
     << "SRCDIR = ../..\n\n"
-    << "all:\n\t@echo $(TESTS) $(EXTRA_GRADES)\n\n"
+    << ".PHONY: tests grade_file\n\n"
+    << "tests:\n\t@echo $(TESTS) $(EXTRA_GRADES)\n\n"
+    << "grade_file:\n\t@echo $(GRADING_FILE)\n\n"
     << "include ../../Make.config\n"
     << "include ../Make.vars\n"
     << "include ../../tests/Make.tests\n";
   make_pincheck.close();
 
-  const auto make_pincheck_res = exec_str("make --silent -f Make.pincheck");
-  if (make_pincheck_res.first != 0 || !make_pincheck_res.second.has_value()) {
+  const auto make_tests_res = exec_str("make tests --silent -f Make.pincheck");
+  if (make_tests_res.first != 0 || !make_tests_res.second.has_value()) {
     panic_msg << "Cannot extract list of tests.";
     panic(panic_msg);
   }
-  const auto all_tests = string_tokenize(*make_pincheck_res.second);
+  const auto all_tests = string_tokenize(*make_tests_res.second);
   Vector<TestCase> target_tests{};
   const auto name_patterns = program.get<Vector<String>>("--");
   const auto subdir_patterns = program.get<Vector<String>>("--subdir");
@@ -209,14 +133,24 @@ int main(int argc, char *argv[]) {
   if(program.get<bool>("--sort")) {
     std::sort(target_tests.rbegin(), target_tests.rend());
   }
+  std::cout << std::endl;
   std::cout << termcolor::bold << "Total " << target_tests.size() << " tests found." << termcolor::reset << std::endl;
+
+  const auto grade_file_res = exec_str("make grade_file --silent -f Make.pincheck");
+  if (grade_file_res.first != 0 || !grade_file_res.second.has_value()) {
+    panic_msg << "Cannot extract the name of grading file.";
+    panic(panic_msg);
+  }
+  auto rubrics = parse_rubric(string_trim(*grade_file_res.second), target_tests);
+
   if (is_verbose) {
     std::cout << "-- Target tests --" << std::endl;
     for(const auto& test_case : target_tests) {
-      std::cout << test_case.subdir << " -> " << test_case.name << std::endl;
+      std::cout << test_case.full_name()
+        << " " << termcolor::grey
+        << "(" << test_case.max_ptr << " ptr)" << termcolor::reset << std::endl;
     }
   }
-
 
   //--------------------------------------------------------
 
@@ -254,192 +188,12 @@ int main(int argc, char *argv[]) {
 
 /** Implementation parts */
 
-static void print_new_version(const String &new_version) {
-  std::cout << termcolor::bright_magenta << termcolor::bold;
-  std::cout << "New version available : " << new_version;
-  std::cout << termcolor::reset << std::endl;
-  std::cout << "Current version : " << PINCHECK_VERSION << std::endl;
-  std::cout << "To upgrade pincheck, go to the cloned directory and run:\n";
-  std::cout << termcolor::bright_white << "\t$ git pull\n\t$ make install";
-  std::cout << termcolor::reset << std::endl << std::endl;
-}
-
-static bool do_check_new_version(const String &github_fetch_cmd, bool is_verbose) {
-  constexpr auto PY_CMD = "python3 -c \"import sys, json; print(json.load(sys.stdin)['tag_name'])\"";
-  try {
-    const auto cmd = github_fetch_cmd + " | " + PY_CMD;
-    if (is_verbose)
-      std::cout << "Version checking command : " << cmd << std::endl;
-    const auto res = exec_str(cmd.c_str());
-    if(!(res.first != 0 || !res.second)) {
-      const auto new_version = string_trim(*res.second);
-      if (new_version != PINCHECK_VERSION) {
-        print_new_version(new_version);
-        return true;
-      } else {
-        if (is_verbose)
-          std::cout << "Same version found." << std::endl;
-        return false;
-      }
-    }
-  } catch (const std::exception &e) {
-  }
-  if (is_verbose)
-    std::cout << "Failed to fetch and compare version." << std::endl;
-  return false;
-}
-
-static void check_new_version(bool is_verbose) {
-  using namespace std::string_literals;
-  constexpr auto GITHUB_URL = "https://api.github.com/repos/xcxcmath/pincheck-kaist/releases/latest";
-  
-  try {
-    if (is_verbose)
-      std::cout << "Version checking...\n";
-
-    // 1. curl
-    const auto curl_cmd = "curl -s "s + GITHUB_URL + " 2> /dev/null";
-    if(do_check_new_version(curl_cmd, is_verbose)) return;
-
-    // 2. wget
-    const auto wget_cmd = "wget -nv -O - "s + GITHUB_URL + " 2> /dev/null";
-    if(do_check_new_version(wget_cmd, is_verbose)) return;
-  } catch (const std::exception &e) {
-
-  }
-}
-
 static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests) {
-  using namespace std::string_literals;
-
   const auto is_verbose = program.get<bool>("--verbose");
   const auto pool_size = program.get<unsigned>("-j");
 
   const auto repeats = program.get<unsigned>("--repeat");
-
-  const String omit_msg = " ... ";
-  constexpr auto COL_JITTER = 3;
-
-  unsigned epoch_passed = 0;
-
-  for(unsigned epoch = 1; epoch <= repeats; ++epoch){
-  Vector<TestResult> results, results_cache;
-  Vector<std::unique_ptr<TestRunner>> pool(pool_size);
-
-  size_t next = 0;
-
-  if(repeats > 1) {
-    std::cout << termcolor::bold << "\nEpoch " << epoch << " of " << repeats << termcolor::reset;
-    std::cout << " (so far: " << termcolor::green << epoch_passed << " epochs passed, "
-      << termcolor::red << (epoch - epoch_passed - 1) << " epochs failed" << termcolor::reset << ")" << std::endl;
-  }
-  
-  // init pool print
-  std::cout << std::endl;
-  while(results.size() < target_tests.size()) {
-    for(size_t i = 0; i < pool_size; ++i) {
-      if(pool[i]) {
-        if(pool[i]->is_finished()) {
-          results_cache.emplace_back(*pool[i]);
-          pool[i] = nullptr;
-        }
-      }
-    }
-    for(size_t i = 0; i < pool_size && next < target_tests.size(); ++i) {
-      if(pool[i]) continue;
-      pool[i] = std::make_unique<TestRunner>(target_tests[next].subdir, target_tests[next].name);
-      pool[i]->register_test(paths);
-      ++next;
-    }
-
-    if(!results_cache.empty()) {
-      std::cout << "\033[2K\033[1G";
-      for(const auto& r : results_cache) {
-        r.print_row(true);
-        std::cout << std::endl;
-        results.emplace_back(r);
-      }
-      results_cache.clear();
-    }
-
-    const auto running_pools = std::count_if(pool.cbegin(), pool.cend(),
-      [](const std::unique_ptr<TestRunner>& p){return p!=nullptr;});
-    const String full_pool_msg = "Running"s + "(" + std::to_string(running_pools) + "/" + std::to_string(pool_size) + ") : ";
-    std::cout << "\033[2K\033[1G";
-    std::cout << termcolor::reset << termcolor::bold << termcolor::yellow
-      << full_pool_msg;
-    std::cout << termcolor::reset << termcolor::yellow;
-    std::string pool_str;
-    for(auto& p : pool) {
-      if(!p) continue;
-      pool_str += p->get_print() + " ";
-      if (const size_t ws_col = get_winsize().ws_col;
-        pool_str.size() + full_pool_msg.size() + COL_JITTER >= ws_col) {
-        pool_str = pool_str.substr(0, ws_col - full_pool_msg.size() - COL_JITTER - omit_msg.size());
-        pool_str += omit_msg;
-        break;
-      }
-    }
-    std::cout << pool_str << termcolor::reset << std::flush;
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  }
-
-  unsigned passed = std::count_if(results.begin(), results.end(),
-    [](const TestResult& r){return r.passed;});
-  unsigned failed = target_tests.size() - passed;
-
-  std::cout << "\033[2K\033[1G";
-  std::cout << "\nFinished total " << termcolor::bold << target_tests.size() << " tests." << termcolor::reset << std::endl;
-  
-  const bool all_passed = (passed == target_tests.size());
-
-  if (!all_passed) {
-    std::cout << "\n" << termcolor::bright_red << "-- Failed tests --" << termcolor::reset << std::endl;
-    for (const auto& tr : results) {
-      if(!tr.passed) {
-        tr.print_row(is_verbose);
-        std::cout << std::endl;
-      }
-    }
-    std::cout << std::endl;
-  }
-  std::cout << termcolor::green << "Pass: ";
-  if(passed != 0) std::cout << termcolor::bold;
-  std::cout << passed << '\t';
-
-  std::cout << termcolor::reset << termcolor::red << "Fail: ";
-  if(failed != 0) std::cout << termcolor::bold;
-  std::cout << failed;
-  std::cout << termcolor::reset << std::endl << std::endl;
-
-  if (all_passed) {
-    std::cout << termcolor::blue << termcolor::bold << "Correct!" << termcolor::reset << std::endl;
-    epoch_passed++;
-  }
-
-  } // for-loop of epoch
-
-  bool all_epoch_passed = epoch_passed == repeats;
-  int return_value = all_epoch_passed ? 0 : 1;
-  if (repeats > 1) {
-    unsigned epoch_failed = repeats - epoch_passed;
-    std::cout << std::endl;
-    std::cout << termcolor::bold << "All " << repeats << " trials done." << std::endl;
-    std::cout << termcolor::reset << termcolor::green << "All passing epochs: ";
-    if(epoch_passed != 0) std::cout << termcolor::bold;
-    std::cout << epoch_passed << std::endl;
-
-    std::cout << termcolor::reset << termcolor::red << "Failed epochs: ";
-    if(epoch_failed != 0) std::cout << termcolor::bold;
-    std::cout << epoch_failed;
-    std::cout << termcolor::reset << std::endl << std::endl;
-
-    if (all_epoch_passed) {
-      std::cout << termcolor::blue << termcolor::bold << "Succeeded for all trials!" << termcolor::reset << std::endl;
-    }
-  }
-
-  return return_value;
+  return check_run(paths, target_tests, is_verbose, pool_size, repeats);
 }
 
 static auto get_target_test_or_panic(const String &t, const Vector<TestCase> &target_tests) {
@@ -550,86 +304,17 @@ static int run_mode_run (argparse::ArgumentParser &program, const Vector<TestCas
 
   const auto full_name = it->full_name();
   std::cout << "Detected just-running mode for "
-    << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl << std::endl;
+    << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl;
+  if(!it->subtitle.empty())
+    std::cout << "Subtitle : " << termcolor::magenta << it->subtitle << termcolor::reset << std::endl;
+  std::cout << std::endl;
 
   const auto run_command = get_running_command(full_name, program.get<bool>("--gdb"), program.get<bool>("--with-timeout"))
     + " | tee " + full_name + ".output";
   if (is_verbose)
     std::cout << "Running command: " << run_command << std::endl << std::endl;;
   
-  const auto ret = system(run_command.c_str());
-  std::cout << std::endl;
-  if (ret != 0) {
-    panic_msg << "The shell command line execution returned with non-zero: " << ret;
-    panic(panic_msg);
-  }
-
-  // PANIC detection
-  int return_value = 0;
-  
-  std::ifstream output_fs(full_name + ".output");
-  if(!output_fs.is_open()) {
-    panic_msg << "Cannot open the output file; cannot detect whether PANIC happened";
-    panic(panic_msg);
-  }
-
-  String line;
-  bool panic_detected = false, call_stack_detected = false;
-  std::smatch panic_match;
-  std::regex panic_re("PANIC", std::regex::grep);
-  String panic_line;
-  std::smatch call_stack_match;
-  std::regex call_stack_re("Call stack\\:");
-  String call_stack_line;
-  while(std::getline(output_fs, line)) {
-    if(std::regex_search(line, panic_match, panic_re)) {
-      panic_detected = true;
-      panic_line = line;
-    } else if (std::regex_search(line, call_stack_match, call_stack_re)) {
-      call_stack_detected = true;
-      call_stack_line = call_stack_match.suffix();
-    }
-  }
-
-  if(!panic_detected) {
-    std::cout << termcolor::green << termcolor::bold;
-    std::cout << "No PANIC message detected" << std::endl;
-  } else {
-    std::cout << termcolor::yellow << termcolor::bold;
-    std::cout << "-- PANIC detected on the pintos execution --" << std::endl;
-    std::cout << termcolor::reset << termcolor::yellow << panic_line << std::endl;
-
-    if (!call_stack_detected) {
-      panic_msg << "PANIC detected, but no call stack found";
-      panic(panic_msg);
-    }
-    
-    std::regex re("(0x[0-9a-f]+)+");
-    std::ostringstream backtrace_cmd_os;
-    backtrace_cmd_os << "backtrace ";
-    const auto call_stack_tokens = string_tokenize(call_stack_line);
-    for(const auto &s: call_stack_tokens) {
-      if(std::regex_match(s, re)) {
-        backtrace_cmd_os << s << " ";
-      } else break;
-    }
-    const auto backtrace_cmd = backtrace_cmd_os.str();
-    std::cout << "Backtrace command: " << backtrace_cmd << std::endl;
-
-    const auto backtrace_res = exec_str(backtrace_cmd.c_str());
-    if(backtrace_res.first != 0 || !backtrace_res.second) {
-      panic_msg << "Backtrace command failed...";
-      panic(panic_msg);
-    }
-
-    std::cout << "Here are the backtrace results:" << std::endl;
-    std::cout << *(backtrace_res.second) << std::endl;
-    return_value = 1;
-  }
-  std::cout << termcolor::reset << std::endl;
-  output_fs.close();
-
-  return return_value;
+  return just_run(run_command, full_name);
 }
 
 static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests){
@@ -642,7 +327,10 @@ static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<TestCas
 
   const auto full_name = it->full_name();
   std::cout << "Detected gdb-running mode for "
-    << termcolor::bold << termcolor::magenta << full_name << termcolor::reset << std::endl << std::endl;
+    << termcolor::bold << termcolor::blue << full_name << termcolor::reset << std::endl;
+  if(!it->subtitle.empty())
+    std::cout << "Subtitle : " << termcolor::magenta << it->subtitle << termcolor::reset << std::endl;
+  std::cout << std::endl;
 
   const auto server_run_command = get_running_command(full_name, true, false) + " < /dev/null 2>&1";
   if (is_verbose)

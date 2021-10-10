@@ -4,13 +4,14 @@
 #include <mutex>
 #include <future>
 #include <chrono>
+#include "test_case.h"
 #include "test_path.h"
 #include "common.h"
 
 class TestResult;
 class TestRunner {
 private:
-  String subdir, name, full_name;
+  TestCase testcase;
   bool running, finished, passed;
   int exit_code;
   String dump;
@@ -27,12 +28,10 @@ private:
 
 public:
   friend TestResult;
-  TestRunner(String subdir, String name);
+  TestRunner(TestCase testcase);
   ~TestRunner() noexcept;
 
-  String get_full_name() const;
-  String get_subdir() const;
-  String get_name() const;
+  const TestCase& get_test_case() const;
   
   bool is_running();
   bool is_finished();

@@ -29,3 +29,4 @@ using Deque = std::deque<T>;
 template<typename T1, typename T2 = T1>
 using Pair = std::pair<T1, T2>;
 
+extern const char *PINCHECK_VERSION;
