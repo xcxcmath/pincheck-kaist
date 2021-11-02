@@ -3,7 +3,7 @@
 Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/pintos-kaist) projects
 ... with several features.
 
-**`filesys` testing will not work now. Please stand by until I configure the testing procedures properly.**
+**Testing with `persistence` of project 4 is currently highly experimental. Please let me any issue about it.**
 
 ![thumb_threads](./images/thumb_threads.gif)
 
@@ -204,6 +204,10 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 - `pincheck -j 8 --sort` : 52 seconds
 
 ### `vm` (including `cow`)
+
+To be tested soon.
+
+### `filesys`
 
 To be tested soon.
 

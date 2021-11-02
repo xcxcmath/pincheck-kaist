@@ -21,7 +21,7 @@
 #include "string_helper.h"
 #include "console_helper.h"
 
-const char *PINCHECK_VERSION = "v21.10.11";
+const char *PINCHECK_VERSION = "v21.11.02";
 
 enum class PincheckMode {
   check, run, gdb
