@@ -6,7 +6,7 @@
 #include "execution.h"
 #include "string_helper.h"
 
-Vector<Rubric> parse_rubric(const Path& grading_file, Vector<TestCase> &target_tests) {
+Vector<Rubric> parse_rubric(const Path& grading_file, Vector<TestCase> &target_tests, Vector<TestCase> &persistence_tests) {
   using namespace std::string_literals;
   std::ostringstream panic_msg;
 
@@ -80,15 +80,23 @@ Vector<Rubric> parse_rubric(const Path& grading_file, Vector<TestCase> &target_t
 
         const auto first_token = string_trim(String{temp.cbegin(), first_space});
         const auto other_token = string_trim(String{first_space+1, temp.cend()});
+        auto finder = [&rubric, &other_token](const TestCase &tc) {
+          return tc.full_name() == rubric.subdir + "/" + other_token;
+        };
         if(first_token == "-"){
           curr_subtitle = other_token;
         } else {
           auto target = std::find_if(target_tests.begin(), target_tests.end(),
-            [&rubric, &other_token](const TestCase &tc){
-              return tc.full_name() == rubric.subdir + "/" + other_token;
-            });
+            finder);
 
-          if(target == target_tests.end()) continue;
+          if(target == target_tests.end()) {
+            target = std::find_if(persistence_tests.begin(), persistence_tests.end(),
+              finder);
+            
+            if(target == persistence_tests.end()) {
+              continue;
+            }
+          }
 
           if(rubric.subtitles.count(curr_subtitle) == 0)
             rubric.subtitles[curr_subtitle] = {};

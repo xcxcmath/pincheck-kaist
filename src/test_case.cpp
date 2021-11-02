@@ -4,7 +4,8 @@ TestCase::TestCase(String subdir, String name)
 : name(std::move(name)), subdir(std::move(subdir))
 , timeout(0)
 , subtitle()
-, max_ptr() {}
+, max_ptr()
+, persistence(false) {}
 
 String TestCase::full_name() const {
   return subdir + "/" + name;

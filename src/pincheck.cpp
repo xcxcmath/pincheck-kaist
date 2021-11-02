@@ -27,10 +27,16 @@ enum class PincheckMode {
   check, run, gdb
 };
 
+struct CacheEntry {
+  bool persistence;
+  int timeout;
+};
+
 static int parse_timeout(const String &command);
+static Optional<String> get_raw_running_command(const String &full_name);
 static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt);
 
-static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests);
+static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests, const Vector<TestCase> &persistence_tests);
 static int run_mode_run (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests);
 static int run_mode_gdb (argparse::ArgumentParser &program, const Vector<TestCase> &target_tests);
 
@@ -91,7 +97,8 @@ int main(int argc, char *argv[]) {
     << "# -*- makefile -*-\n\n"
     << "SRCDIR = ../..\n\n"
     << ".PHONY: tests grade_file\n\n"
-    << "tests:\n\t@echo $(TESTS) $(EXTRA_GRADES)\n\n"
+    << "tests:\n\t@echo $(TESTS) $(EXTRA_GRADES) "
+    << "$(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_GRADES))\n\n"
     << "grade_file:\n\t@echo $(GRADING_FILE)\n\n"
     << "include ../../Make.config\n"
     << "include ../Make.vars\n"
@@ -104,7 +111,34 @@ int main(int argc, char *argv[]) {
     panic(panic_msg);
   }
   const auto all_tests = string_tokenize(*make_tests_res.second);
+
+  // pincheck cache
+  std::ifstream cache_file_input{"cache.pincheck"};
+  std::unordered_map<String, CacheEntry> cache_map;
+  if(cache_file_input.is_open()) {
+    String line;
+    while(std::getline(cache_file_input, line)) {
+      auto tokens = string_tokenize(line);
+      if(tokens.size() != 3) {
+        continue;
+      }
+
+      bool persistence;
+      int timeout;
+      try {
+        persistence = (std::stoi(tokens[1]) != 0);
+        timeout = std::stoi(tokens[2]);
+      } catch (std::exception&) {
+        continue;
+      }
+      cache_map[tokens[0]] = CacheEntry{.persistence = persistence, .timeout = timeout};
+    }
+    cache_file_input.close();
+  }
+
+  std::cout << "Extracting list of tests. May take some times..." << std::endl;
   Vector<TestCase> target_tests{};
+  Vector<TestCase> persistence_tests{};
   const auto name_patterns = program.get<Vector<String>>("--");
   const auto subdir_patterns = program.get<Vector<String>>("--subdir");
   const auto name_ex_patterns = program.get<Vector<String>>("--exclude");
@@ -123,25 +157,62 @@ int main(int argc, char *argv[]) {
 
     TestCase here(std::move(subdir), std::move(name));
 
-    if(program.get<bool>("--sort")) {
-      const auto cmd = get_running_command(here.full_name(), false, true);
-      here.timeout = parse_timeout(cmd);
+    auto cache_it = cache_map.find(here.full_name());
+    bool add_to_cache = false;
+    if(cache_it != cache_map.end()) {
+      here.timeout = cache_it->second.timeout;
+      here.persistence = cache_it->second.persistence;
+    } else {
+      const auto opt_cmd = get_raw_running_command(here.full_name());
+      if(!opt_cmd) {
+        auto pers_it = std::find(all_tests.cbegin(), all_tests.cend(), here.full_name() + "-persistence");
+        if(pers_it != all_tests.cend()) {
+          here.persistence = true;
+          here.timeout = 60;
+        } else {
+          continue;
+        }
+      } else {
+        here.timeout = parse_timeout(*opt_cmd);
+      }
+
+      add_to_cache = true;
     }
 
-    target_tests.push_back(here);
+    if (here.persistence) {
+      persistence_tests.push_back(here);
+    } else {
+      target_tests.push_back(here);
+    }
+    if(add_to_cache) {
+      CacheEntry entry;
+      entry.persistence = here.persistence;
+      entry.timeout = here.timeout;
+      cache_map[here.full_name()] = entry;
+    }
+  }
+  std::ofstream cache_file_output{"cache.pincheck"};
+  if(cache_file_output.is_open()) {
+    std::cout << "cache storing..\n";
+    for(const auto &[s, e]: cache_map) {
+      cache_file_output << s << ' ' << static_cast<int>(e.persistence) << ' ' << e.timeout << '\n';
+    }
+    cache_file_output.close();
   }
   if(program.get<bool>("--sort")) {
     std::sort(target_tests.rbegin(), target_tests.rend());
   }
+
+  const auto full_test_size = target_tests.size() + 2 * persistence_tests.size();
   std::cout << std::endl;
-  std::cout << termcolor::bold << "Total " << target_tests.size() << " tests found." << termcolor::reset << std::endl;
+  std::cout << termcolor::bold << "Total " << full_test_size << " tests found." << termcolor::reset << std::endl;
 
   const auto grade_file_res = exec_str("make grade_file --silent -f Make.pincheck");
   if (grade_file_res.first != 0 || !grade_file_res.second.has_value()) {
     panic_msg << "Cannot extract the name of grading file.";
     panic(panic_msg);
   }
-  auto rubrics = parse_rubric(string_trim(*grade_file_res.second), target_tests);
+  auto rubrics = parse_rubric(string_trim(*grade_file_res.second), target_tests, persistence_tests);
 
   if (is_verbose) {
     std::cout << "-- Target tests --" << std::endl;
@@ -149,6 +220,12 @@ int main(int argc, char *argv[]) {
       std::cout << test_case.full_name()
         << " " << termcolor::grey
         << "(" << test_case.max_ptr << " ptr)" << termcolor::reset << std::endl;
+    }
+    for(const auto& test_case : persistence_tests) {
+      std::cout << test_case.full_name()
+        << " " << termcolor::grey
+        << "(" << test_case.max_ptr << " ptr)" << termcolor::reset << std::endl;
+      std::cout << test_case.full_name() << "-persistence" << termcolor::reset << std::endl;
     }
   }
 
@@ -173,7 +250,7 @@ int main(int argc, char *argv[]) {
       break;
     
     case PincheckMode::check:
-      exit_code = run_mode_check (program, paths, target_tests);
+      exit_code = run_mode_check (program, paths, target_tests, persistence_tests);
       break;
     
     default:
@@ -188,12 +265,12 @@ int main(int argc, char *argv[]) {
 
 /** Implementation parts */
 
-static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests) {
+static int run_mode_check (argparse::ArgumentParser &program, const TestPath &paths, const Vector<TestCase> &target_tests, const Vector<TestCase> &persistence_tests) {
   const auto is_verbose = program.get<bool>("--verbose");
   const auto pool_size = program.get<unsigned>("-j");
 
   const auto repeats = program.get<unsigned>("--repeat");
-  return check_run(paths, target_tests, is_verbose, pool_size, repeats);
+  return check_run(paths, target_tests, persistence_tests, is_verbose, pool_size, repeats);
 }
 
 static auto get_target_test_or_panic(const String &t, const Vector<TestCase> &target_tests) {
@@ -233,7 +310,7 @@ static int parse_timeout(const String &command) {
   return ret;
 }
 
-static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt) {
+static Optional<String> get_raw_running_command(const String &full_name) {
   using namespace std::string_literals;
   std::ostringstream panic_msg;
   const auto get_run_cmd_command = "make "s + full_name
@@ -246,6 +323,25 @@ static String get_running_command(const String &full_name, bool gdb_opt, bool ti
   }
 
   auto full_run_command = string_trim(*(get_run_cmd_result.second));
+  if(full_run_command.find('\n') != String::npos) {
+    return std::nullopt;
+  }
+
+  return full_run_command;
+}
+
+static String get_running_command(const String &full_name, bool gdb_opt, bool timeout_opt) {
+  using namespace std::string_literals;
+  std::ostringstream panic_msg;
+
+  auto optional_command = get_raw_running_command(full_name);
+  if(!optional_command) {
+    panic_msg << "Cannot find out the command line to run the case";
+    panic(panic_msg);
+  }
+
+  String full_run_command = *optional_command;
+
   const auto cut_idx = full_run_command.find('<');
   if(cut_idx == String::npos) {
     panic_msg << "The command line to run the case seems to be not valid:\n";

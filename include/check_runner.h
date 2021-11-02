@@ -5,7 +5,7 @@
 #include "test_path.h"
 #include "test_case.h"
 
-int check_run(const TestPath &paths, const Vector<TestCase> &target_tests,
+int check_run(const TestPath &paths, const Vector<TestCase> &target_tests, const Vector<TestCase> &persistence_tests,
   bool is_verbose, unsigned pool_size, unsigned repeats);
 
 #endif

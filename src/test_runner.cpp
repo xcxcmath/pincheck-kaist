@@ -6,8 +6,11 @@
 
 TestRunner::TestRunner(TestCase testcase)
 : testcase(std::move(testcase))
-, running(false), finished(false), passed(false)
-, exit_code(0), dump(), except_dump(nullptr)
+, running(false), finished(false)
+, passed(false), passed_pers(false)
+, exit_code(0), exit_code_pers(0)
+, dump(), dump_pers()
+, except_dump(nullptr)
 , start_time{}, end_time{}, fut{}, mut{}
 {
 }
@@ -63,53 +66,81 @@ void TestRunner::register_test(const TestPath& paths) noexcept {
       }
       try {
         const auto result_file = testcase.full_name() + ".result";
-        const auto result_cmd = "make "s + String{result_file}
+        const auto result_pers_file = testcase.full_name() + "-persistence.result";
+        const auto result_cmd = "make "s + String{testcase.persistence ? result_pers_file : result_file}
           + " --silent --assume-old=os.dsk --what-if=os.dsk 2>&1";
         const auto result_cmd_res = exec_str(result_cmd.c_str());
         if(result_cmd_res.first != 0 || !result_cmd_res.second) {
           {
             std::unique_lock lock{mut};
-            dump = "Cannot run making result file properly";
+            dump = dump_pers = "Cannot run making result file properly";
             end_time = std::chrono::system_clock::now();
             finished = true;
-            exit_code = result_cmd_res.first;
-          }
-          return;
-        }
-
-        std::ifstream res_fs(result_file);
-        if(!res_fs.is_open()) {
-          {
-            std::unique_lock lock{mut};
-            dump = "Cannot open result file";
-            end_time = std::chrono::system_clock::now();
-            finished = true;
-            exit_code = -1;
+            exit_code = exit_code_pers = result_cmd_res.first;
           }
           return;
         }
 
         std::ostringstream os;
         std::string line;
-        bool first_pass = false;
-        bool first_line = true;
-        while(std::getline(res_fs, line)) {
-          if(first_line) {
-            first_line = false;
-            if(line == "PASS") {
-              first_pass = true;
+        std::ifstream res_fs(result_file);
+        if(!res_fs.is_open()) {
+          std::unique_lock lock{mut};
+          dump = "Cannot open result file";
+          passed = false;
+          exit_code = -1;
+        } else {
+          bool first_pass = false;
+          bool first_line = true;
+          while(std::getline(res_fs, line)) {
+            if(first_line) {
+              first_line = false;
+              if(line == "PASS") {
+                first_pass = true;
+              }
+            }
+            os << line << '\n';
+          }
+          {
+            std::unique_lock lock{mut};
+            dump = os.str();
+            passed = first_pass;
+            exit_code = 0;
+          }
+        }
+
+        if(testcase.persistence) {
+          std::ifstream res_fs(result_pers_file);
+          if(!res_fs.is_open()) {
+            std::unique_lock lock{mut};
+            dump_pers = "Cannot open result file";
+            passed_pers = false;
+            exit_code_pers = -1;
+          } else {
+            bool first_pass = false;
+            bool first_line = true;
+            while(std::getline(res_fs, line)) {
+              if(first_line) {
+                first_line = false;
+                if(line == "PASS") {
+                  first_pass = true;
+                }
+              }
+              os << line << '\n';
+            }
+            {
+              std::unique_lock lock{mut};
+              dump_pers = os.str();
+              passed_pers = first_pass;
+              exit_code_pers = 0;
             }
           }
-          os << line << '\n';
         }
         
         {
           std::unique_lock lock{mut};
           finished = true;
           end_time = std::chrono::system_clock::now();
-          dump = os.str();
-          passed = first_pass;
-          exit_code = 0;
         }
         // get make .output cmd
         /*const auto output_path = full_name + ".output";
@@ -133,13 +164,27 @@ String TestRunner::get_print() {
   std::ostringstream os;
 
   os << testcase.name;
+  if(testcase.persistence) {
+    os << "(-persistence)";
+  }
   if(running) {
-    os << "(";
+    os << "[";
     os << std::chrono::duration_cast<std::chrono::seconds>(
       std::chrono::system_clock::now() - start_time
     ).count();
-    os << "s)";
+    os << "s]";
   }
 
   return os.str();
+}
+
+Vector<TestResult> TestRunner::get_results() {
+  Vector<TestResult> ret;
+  ret.emplace_back(testcase, passed, exit_code, dump, except_dump, start_time, end_time);
+  if(testcase.persistence) {
+    testcase.name += "-persistence";
+    ret.emplace_back(testcase, passed_pers, exit_code_pers, dump_pers, except_dump, start_time, end_time);
+  }
+
+  return ret;
 }

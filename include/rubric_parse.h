@@ -12,6 +12,6 @@ struct Rubric {
   std::unordered_map<String, Vector<String>> subtitles;
 };
 
-Vector<Rubric> parse_rubric(const Path& grading_file, Vector<TestCase> &target_tests);
+Vector<Rubric> parse_rubric(const Path& grading_file, Vector<TestCase> &target_tests, Vector<TestCase> &persistence_tests);
 
 #endif

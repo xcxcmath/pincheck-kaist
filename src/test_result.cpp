@@ -4,11 +4,14 @@
 #include "test_result.h"
 #include "termcolor/termcolor.hpp"
 
-TestResult::TestResult(const TestRunner& tr)
-: testcase(tr.testcase)
-, passed(tr.passed), exit_code(tr.exit_code)
-, dump(tr.dump), except_dump(tr.except_dump)
-, start_time(tr.start_time), end_time(tr.end_time){
+TestResult::TestResult
+  (const TestCase &testcase, bool passed, int exit_code, const String& dump, const char* except_dump,
+    std::chrono::system_clock::time_point start_time,
+    std::chrono::system_clock::time_point end_time)
+: testcase(testcase)
+, passed(passed), exit_code(exit_code)
+, dump(dump), except_dump(except_dump)
+, start_time(start_time), end_time(end_time){
 }
 
 void TestResult::print_row(bool detail, bool verbose) const {

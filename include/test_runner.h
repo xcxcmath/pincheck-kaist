@@ -6,15 +6,15 @@
 #include <chrono>
 #include "test_case.h"
 #include "test_path.h"
+#include "test_result.h"
 #include "common.h"
 
-class TestResult;
 class TestRunner {
 private:
   TestCase testcase;
-  bool running, finished, passed;
-  int exit_code;
-  String dump;
+  bool running, finished, passed, passed_pers;
+  int exit_code, exit_code_pers;
+  String dump, dump_pers;
   const char* except_dump;
 
   std::chrono::system_clock::time_point start_time, end_time;
@@ -41,6 +41,7 @@ public:
 
   void register_test(const TestPath& paths) noexcept;
   String get_print();
+  Vector<TestResult> get_results();
 };
 
 #endif

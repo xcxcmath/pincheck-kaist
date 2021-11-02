@@ -9,6 +9,8 @@ struct TestCase {
 
   String subtitle;
   unsigned max_ptr;
+  
+  bool persistence;
 
   TestCase(String subdir, String name);
   String full_name() const;
