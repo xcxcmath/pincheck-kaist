@@ -3,7 +3,7 @@
 Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/pintos-kaist) projects
 ... with several features.
 
-**Some more prerequisites are listed. Please read.**
+**`filesys` testing will not work now. Please stand by until I configure the testing procedures properly.**
 
 ![thumb_threads](./images/thumb_threads.gif)
 
