@@ -3,7 +3,7 @@
 Parallel testing for [casys-kaist/pintos-kaist](https://github.com/casys-kaist/pintos-kaist) projects
 ... with several features.
 
-**Testing with `persistence` of project 4 is currently highly experimental. Please let me any issue about it.**
+**Testing with `persistence` of project 4 is currently highly experimental. Please let me know any issue about it.**
 
 ![thumb_threads](./images/thumb_threads.gif)
 
