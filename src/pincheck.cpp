@@ -21,7 +21,7 @@
 #include "string_helper.h"
 #include "console_helper.h"
 
-const char *PINCHECK_VERSION = "v21.11.02";
+const char *PINCHECK_VERSION = "v21.11.09";
 
 enum class PincheckMode {
   check, run, gdb
@@ -323,7 +323,7 @@ static Optional<String> get_raw_running_command(const String &full_name) {
   }
 
   auto full_run_command = string_trim(*(get_run_cmd_result.second));
-  if(full_run_command.find('\n') != String::npos) {
+  if(std::count(full_run_command.begin(), full_run_command.end(), '\n') >= 2) {
     return std::nullopt;
   }
 
