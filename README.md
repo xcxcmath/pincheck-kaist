@@ -203,9 +203,27 @@ On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
 - `pincheck -j 8` : 57 seconds
 - `pincheck -j 8 --sort` : 52 seconds
 
-### `vm` (including `cow`)
+### `vm` (including `cow-simple`)
 
-To be tested soon.
+On KCloud VM (2 cores, 4GB RAM, 100GB Storage, Ubuntu 18.04)
+
+- `make check` : 323 seconds
+- `make check -j 2` : 141 seconds
+- `pincheck (-j 2)` : 175 seconds
+- `make check -j 3` : 122 seconds
+- `pincheck -j 3` : 145 seconds
+
+On my VirtualBox (VM with 4 cores, 8GB RAM, 20GB Storage, Ubuntu 18.04)
+
+- `make check` : 297 seconds
+- `make check -j 4` : 81 seconds
+- `pincheck (-j 4)` : 93 seconds
+- `pincheck (-j 4) --sort` : 73 seconds
+- `make check -j 5` : 76 seconds
+- `pincheck -j 5` : 78 seconds
+- `make check -j 8` : 65 seconds
+- `pincheck -j 8` : 72 seconds
+- `pincheck -j 8 --sort` : 58 seconds
 
 ### `filesys`
 
